@@ -136,20 +136,16 @@
         let startX;
         let startY;
         let zoom = 1;
+		let points = [];
 
-        // Definícia bodov
-        const points = [
-            {
-                name: "Amantius",
-                x: 0,
-                y: 0
-            },
-            {
-                name: "Eli",
-                x: 40,
-                y: -500
-            }
-        ];
+		fetch('/Data/points.json')
+			.then(response => response.json())
+			.then(data => {
+				points = data.points;
+				createMapPoints();
+				updatePointPositions();
+			})
+			.catch(error => console.error('Error loading points:', error));;
 
         // Vytvorenie mapových dielov
         const tiles = [];
