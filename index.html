@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <title>Navigácia po mape 4x4</title>
+    <style>
+        .map-container {
+            position: relative;
+            width: 1024px;
+            height: 600px;
+            margin: 20px auto;
+            border: 2px solid #333;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        .map-container:active {
+            cursor: grabbing;
+        }
+
+        .map-grid {
+            position: absolute;
+            display: grid;
+            grid-template-columns: repeat(4, 512px);
+            grid-template-rows: repeat(4, 512px);
+            transform-origin: 0 0;
+            transition: transform 0.1s ease-out;
+        }
+
+        .map-tile {
+            width: 512px;
+            height: 512px;
+            background-color: #f0f0f0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .map-tile img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            pointer-events: none;
+        }
+
+        .coordinates {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border-radius: 3px;
+            z-index: 1000;
+        }
+
+        .zoom-controls {
+            position: fixed;
+            right: 10px;
+            top: 10px;
+            background: white;
+            padding: 5px;
+            border-radius: 3px;
+            z-index: 1000;
+        }
+
+        .map-point {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .point-label {
+            position: absolute;
+            background: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            transform: translateY(-25px);
+            white-space: nowrap;
+        }
+
+        button {
+            padding: 5px 10px;
+            margin: 0 2px;
+            cursor: pointer;
+        }
+		.test-data {
+            position: fixed;
+            top: 30px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border-radius: 3px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="coordinates">
+        Pozícia: <span id="position">x: 0, y: 0</span><br>
+        Zoom: <span id="zoom-level">1.0</span>x
+		<div id="testData" class="test-data"></div>
+    </div>
+
+    <div class="zoom-controls">
+        <button onclick="adjustZoom(0.1)">+</button>
+        <button onclick="adjustZoom(-0.1)">-</button>
+    </div>
+
+    <div class="map-container" id="mapContainer">
+        <div class="map-grid" id="mapGrid"></div>
+    </div>
+
+    <script>
+        const mapContainer = document.getElementById('mapContainer');
+        const mapGrid = document.getElementById('mapGrid');
+        const positionDisplay = document.getElementById('position');
+        const zoomDisplay = document.getElementById('zoom-level');
+		const testDataElement = document.getElementById('testData');
+		
+		fetch('/Data/test.json')
+			.then(response => response.json())
+			.then(data => console.log(data))
+			.catch(error => console.error('Chyba:', error));
+
+        let isDragging = false;
+        let currentX = -1024;
+        let currentY = -1024;
+        let startX;
+        let startY;
+        let zoom = 1;
+
+        // Definícia bodov
+        const points = [
+            {
+                name: "Amantius",
+                x: 0,
+                y: 0
+            },
+            {
+                name: "Eli",
+                x: 40,
+                y: -500
+            }
+        ];
+
+        // Vytvorenie mapových dielov
+        const tiles = [];
+        for (let y = -5; y < 2; y++) {
+            for (let x = -2; x < 2; x++) {
+                const tile = document.createElement('div');
+                tile.className = 'map-tile';
+                
+                const tileX = x * 512 - 1024;
+                const tileY = y * 512 - 2560;
+                
+                tile.dataset.x = tileX;
+                tile.dataset.y = tileY;
+                
+                const img = document.createElement('img');
+                img.src = `Data/map_${x}_${y}.webp`;
+                img.alt = `Mapa ${x},${y}`;
+                img.loading = "lazy";
+                img.draggable = false;
+                tile.appendChild(img);
+                
+                mapGrid.appendChild(tile);
+                tiles.push(tile);
+            }
+        }
+
+        // Vytvorenie a aktualizácia bodov na mape
+        function createMapPoints() {
+            points.forEach(point => {
+                const pointElement = document.createElement('div');
+                pointElement.className = 'map-point';
+                pointElement.id = `point-${point.name}`;
+                
+                const label = document.createElement('div');
+                label.className = 'point-label';
+                label.textContent = point.name;
+                pointElement.appendChild(label);
+                
+                mapGrid.appendChild(pointElement);
+            });
+        }
+
+        function updatePointPositions() {
+            points.forEach(point => {
+                const pointElement = document.getElementById(`point-${point.name}`);
+                if (pointElement) {
+                    // Prepočet pozície bodu vzhľadom na posunutie mapy a zoom
+                    const x = (point.x + 1024);
+                    const y = (point.y + 2560);
+                    pointElement.style.left = `${x}px`;
+                    pointElement.style.top = `${y}px`;
+                    pointElement.style.transform = `translate(-50%, -50%) scale(${1/zoom})`;
+                }
+            });
+        }
+
+        function checkVisibility() {
+            const containerRect = mapContainer.getBoundingClientRect();
+            
+            tiles.forEach(tile => {
+                const tileRect = tile.getBoundingClientRect();
+                const img = tile.querySelector('img');
+                
+                const isVisible = !(
+                    tileRect.right < containerRect.left ||
+                    tileRect.left > containerRect.right ||
+                    tileRect.bottom < containerRect.top ||
+                    tileRect.top > containerRect.bottom
+                );
+                
+                img.style.display = isVisible ? 'block' : 'none';
+            });
+        }
+
+        function getMouseMapPosition(e) {
+            const rect = mapContainer.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const mapX = Math.round((-currentX + mouseX) / zoom) - 1024;
+            const mapY = Math.round((-currentY + mouseY) / zoom) - 2560;
+            
+            positionDisplay.textContent = `x: ${mapX}, y: ${mapY}`;
+            return { mapX, mapY };
+        }
+
+        function updatePosition(x, y) {
+            currentX = x;
+            currentY = y;
+            mapGrid.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+            updatePointPositions();
+        }
+
+        function adjustZoom(delta, e) {
+            const mousePos = e ? getMouseMapPosition(e) : null;
+            const oldZoom = zoom;
+            const newZoom = Math.max(0.2, Math.min(2, zoom + delta));
+            
+            if (newZoom !== zoom) {
+                zoom = newZoom;
+                zoomDisplay.textContent = zoom.toFixed(1);
+
+                if (mousePos) {
+                    const zoomFactor = newZoom / oldZoom;
+                    const mouseX = e.clientX - mapContainer.getBoundingClientRect().left;
+                    const mouseY = e.clientY - mapContainer.getBoundingClientRect().top;
+                    
+                    const newX = mouseX - (mouseX - currentX) * zoomFactor;
+                    const newY = mouseY - (mouseY - currentY) * zoomFactor;
+                    
+                    updatePosition(newX, newY);
+                } else {
+                    updatePosition(currentX, currentY);
+                }
+            }
+        }
+
+        mapContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            adjustZoom(delta, e);
+        });
+
+        mapContainer.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                isDragging = true;
+                startX = e.clientX - currentX;
+                startY = e.clientY - currentY;
+                mapContainer.style.cursor = 'grabbing';
+            }
+        });
+
+        mapContainer.addEventListener('mousemove', (e) => {
+            getMouseMapPosition(e);
+
+            if (!isDragging) return;
+
+            const newX = e.clientX - startX;
+            const newY = e.clientY - startY;
+            
+            updatePosition(newX, newY);
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (e.button === 0) {
+                isDragging = false;
+                mapContainer.style.cursor = 'grab';
+            }
+        });
+
+        mapContainer.addEventListener('mouseleave', () => {
+            isDragging = false;
+            mapContainer.style.cursor = 'grab';
+        });
+
+        mapContainer.addEventListener('selectstart', (e) => {
+            if (isDragging) {
+                e.preventDefault();
+            }
+        });
+
+        // Inicializácia
+        createMapPoints();
+        updatePosition(currentX, currentY);
+    </script>
+</body>
+</html>
