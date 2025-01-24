@@ -1,5 +1,14 @@
-﻿{
-    "name": "Amantius",
-    "x": 0,
-    "y": 0
+{
+    "points": [
+        {
+            "name": "Amantius",
+            "x": -50,
+            "y": 0
+        },
+        {
+            "name": "Eli", 
+            "x": 40,
+            "y": -500
+        }
+    ]
 }
