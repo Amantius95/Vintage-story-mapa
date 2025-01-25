@@ -1,1 +1,198 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <title>Navigácia po mape 4x4</title>
+    <style>
+        .map-container {
+            position: relative;
+            width: 1024px;
+            height: 1024px;
+            margin: 20px auto;
+            border: 2px solid #333;
+            overflow: hidden;
+            cursor: grab;
+        }
 
+        .map-container:active {
+            cursor: grabbing;
+        }
+
+        .map-grid {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(4, 512px);
+            grid-template-rows: repeat(4, 512px);
+            transform-origin: center;
+            transition: transform 0.1s ease-out;
+        }
+
+        .map-tile {
+            width: 512px;
+            height: 512px;
+            border: 1px solid #ccc;
+            background-color: #f0f0f0;
+            position: relative;
+        }
+
+        .map-tile img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        .coordinates {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border-radius: 3px;
+            z-index: 1000;
+        }
+
+        .zoom-controls {
+            position: fixed;
+            right: 10px;
+            top: 10px;
+            background: white;
+            padding: 5px;
+            border-radius: 3px;
+            z-index: 1000;
+        }
+
+        button {
+            padding: 5px 10px;
+            margin: 0 2px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="coordinates">
+        Pozícia: <span id="position">x: 0, y: 0</span><br>
+        Zoom: <span id="zoom-level">1.0</span>x
+    </div>
+
+    <div class="zoom-controls">
+        <button onclick="adjustZoom(0.1)">+</button>
+        <button onclick="adjustZoom(-0.1)">-</button>
+    </div>
+
+    <div class="map-container" id="mapContainer">
+        <div class="map-grid" id="mapGrid"></div>
+    </div>
+
+    <script>
+        const mapContainer = document.getElementById('mapContainer');
+        const mapGrid = document.getElementById('mapGrid');
+        const positionDisplay = document.getElementById('position');
+        const zoomDisplay = document.getElementById('zoom-level');
+
+        let isDragging = false;
+        let currentX = 0;
+        let currentY = 0;
+        let startX;
+        let startY;
+        let zoom = 1;
+
+        // Vytvorenie mapových dielov
+        const tiles = [];
+        for (let y = 0; y < 4; y++) {
+            for (let x = 0; x < 4; x++) {
+                const tile = document.createElement('div');
+                tile.className = 'map-tile';
+                tile.dataset.x = x;
+                tile.dataset.y = y;
+                
+                const img = document.createElement('img');
+                img.src = `map_${x}_${y}.webp`;  // Cesta k mapovým dielom
+                img.alt = `Mapa ${x},${y}`;
+                tile.appendChild(img);
+                
+                mapGrid.appendChild(tile);
+                tiles.push(tile);
+            }
+        }
+
+        // Kontrola viditeľnosti mapových dielov
+        function checkVisibility() {
+            const containerRect = mapContainer.getBoundingClientRect();
+            
+            tiles.forEach(tile => {
+                const tileRect = tile.getBoundingClientRect();
+                const img = tile.querySelector('img');
+                
+                // Kontrola prekryvu s viewportom
+                const isVisible = !(
+                    tileRect.right < containerRect.left ||
+                    tileRect.left > containerRect.right ||
+                    tileRect.bottom < containerRect.top ||
+                    tileRect.top > containerRect.bottom
+                );
+                
+                // Načítanie/odnačítanie obrázka
+                img.style.display = isVisible ? 'block' : 'none';
+            });
+        }
+
+        function updatePosition(x, y) {
+            const mapX = -x / zoom;
+            const mapY = -y / zoom;
+            
+            positionDisplay.textContent = `x: ${Math.round(mapX)}, y: ${Math.round(mapY)}`;
+            mapGrid.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+            
+            // Kontrola viditeľnosti po každej zmene pozície
+            checkVisibility();
+        }
+
+        function adjustZoom(delta) {
+            const newZoom = Math.max(0.5, Math.min(4, zoom + delta));
+            if (newZoom !== zoom) {
+                zoom = newZoom;
+                zoomDisplay.textContent = zoom.toFixed(1);
+                updatePosition(currentX, currentY);
+            }
+        }
+
+        mapContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            adjustZoom(delta);
+        });
+
+        mapContainer.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX - currentX;
+            startY = e.clientY - currentY;
+            mapContainer.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            let newX = e.clientX - startX;
+            let newY = e.clientY - startY;
+
+            // Upravené limity pre 4x4 mapu
+            const maxOffset = 1024 * zoom;
+            newX = Math.min(maxOffset, Math.max(-maxOffset, newX));
+            newY = Math.min(maxOffset, Math.max(-maxOffset, newY));
+
+            currentX = newX;
+            currentY = newY;
+            updatePosition(currentX, currentY);
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            mapContainer.style.cursor = 'grab';
+        });
+
+        // Inicializácia
+        checkVisibility();
+    </script>
+</body>
+</html>
