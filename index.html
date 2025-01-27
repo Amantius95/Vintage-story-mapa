@@ -66,31 +66,51 @@
             z-index: 1000;
         }
 
-        .map-point {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            background-color: red;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 1000;
-            pointer-events: none;
-        }
+		.map-point {
+			position: absolute;
+			width: 20px;
+			height: 20px;
+			transform: translate(-50%, -50%);
+			z-index: 1000;
+			pointer-events: auto;
+			background-size: contain;
+			background-repeat: no-repeat;
+			background-position: center;
+			cursor: pointer;
+		}
 
-        .point-label {
-            position: absolute;
-            background: white;
-            padding: 2px 5px;
-            border-radius: 3px;
-            transform: translateY(-25px);
-            white-space: nowrap;
-        }
+		.map-point-home {
+			background-image: url('Data/Home.svg');
+		}
+
+		.map-point-cyclone1 {
+			background-image: url('Data/Cyclone1.svg');
+		}
+
+		.map-point-cyclone2 {
+			background-image: url('Data/Cyclone2.svg');
+		}
+
+		.point-label {
+			position: absolute;
+			background: white;
+			padding: 2px 5px;
+			border-radius: 3px;
+			transform: translateY(-25px);
+			white-space: nowrap;
+			display: none;
+		}
+		
+		.map-point:hover .point-label {
+			display: block;  /* Zobrazí sa pri hoveri */
+		}
 
         button {
             padding: 5px 10px;
             margin: 0 2px;
             cursor: pointer;
         }
+		
     </style>
 </head>
 <body>
@@ -121,10 +141,10 @@
         let startX;
         let startY;
         let zoom = 1;
-		let sever = 6;
-		let zapad = 3;
+		let sever = 3;
+		let zapad = 6;
 		let juh = 5;
-		let vychod = 2;
+		let vychod = 5;
 		
 		document.documentElement.style.setProperty('--columns', vychod + zapad);
 		
@@ -152,42 +172,68 @@
                 tiles.push(tile);
             }
         }
-		fetch('body.json')
-			.then(response => response.json())
-			.then(data => {
-				points = data;
-				createMapPoints();
-			});
+		
+		const points = [
+			{
+				"name": "Amantius",
+				"x": 0,
+				"y": 0,
+				"type": "home"
+			},
+			{
+				"name": "Am 1a (92)",
+				"x": 200,
+				"y": -1500,
+				"type": "cyclone1"
+			},
+			{
+				"name": "Am 1b (45)",
+				"x": -80,
+				"y": -70,
+				"type": "cyclone2"
+			},
+			{
+				"name": "Am 2a (71)",
+				"x": 70,
+				"y": 120,
+				"type": "cyclone1"
+			},
+			{
+				"name": "Am 2b (99)",
+				"x": 300,
+				"y": 400,
+				"type": "cyclone2"
+			}
+		];
 
         // Vytvorenie a aktualizácia bodov na mape
         function createMapPoints() {
-            points.forEach(point => {
-                const pointElement = document.createElement('div');
-                pointElement.className = 'map-point';
-                pointElement.id = `point-${point.name}`;
-                
-                const label = document.createElement('div');
-                label.className = 'point-label';
-                label.textContent = point.name;
-                pointElement.appendChild(label);
-                
-                mapGrid.appendChild(pointElement);
-            });
-        }
+			points.forEach(point => {
+				const pointElement = document.createElement('div');
+				pointElement.className = `map-point map-point-${point.type}`;
+				pointElement.id = `point-${point.name}`;
+				
+				const label = document.createElement('div');
+				label.className = 'point-label';
+				label.textContent = point.name;
+				pointElement.appendChild(label);
+				
+				mapGrid.appendChild(pointElement);
+			});
+		}
 
-        function updatePointPositions() {
-            points.forEach(point => {
-                const pointElement = document.getElementById(`point-${point.name}`);
-                if (pointElement) {
-                    // Prepočet pozície bodu vzhľadom na posunutie mapy a zoom
-                    const x = (point.x + 512 * zapad);
-                    const y = (point.y + 512 * sever);
-                    pointElement.style.left = `${x}px`;
-                    pointElement.style.top = `${y}px`;
-                    pointElement.style.transform = `translate(-50%, -50%) scale(${1/zoom})`;
-                }
-            });
-        }
+		function updatePointPositions() {
+			points.forEach(point => {
+				const pointElement = document.getElementById(`point-${point.name}`);
+				if (pointElement) {
+					const x = (point.x + 512 * zapad);
+					const y = (point.y + 512 * sever);
+					pointElement.style.left = `${x}px`;
+					pointElement.style.top = `${y}px`;
+					pointElement.style.transform = `translate(-50%, -50%) scale(${1/zoom})`;
+				}
+			});
+		}
 
         function checkVisibility() {
             const containerRect = mapContainer.getBoundingClientRect();
@@ -229,7 +275,7 @@
         function adjustZoom(delta, e) {
             const mousePos = e ? getMouseMapPosition(e) : null;
             const oldZoom = zoom;
-            const newZoom = Math.max(0.2, Math.min(2, zoom + delta));
+            const newZoom = Math.max(0.2, Math.min(4, zoom + delta));
             
             if (newZoom !== zoom) {
                 zoom = newZoom;
