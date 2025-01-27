@@ -2,12 +2,12 @@
 <html lang="sk">
 <head>
     <meta charset="UTF-8">
-    <title>Navigácia po mape 4x4</title>
+    <title>Navigácia po mape</title>
     <style>
         .map-container {
             position: relative;
             width: 1024px;
-            height: 1024px;
+            height: 600px;
             margin: 20px auto;
             border: 2px solid #333;
             overflow: hidden;
@@ -19,27 +19,31 @@
         }
 
         .map-grid {
-            position: relative;
+            position: absolute;
             display: grid;
-            grid-template-columns: repeat(4, 512px);
-            grid-template-rows: repeat(4, 512px);
-            transform-origin: center;
+            grid-template-columns: repeat(var(--columns), 512px);
+            grid-template-rows: repeat(512px);
+            transform-origin: 0 0;
             transition: transform 0.1s ease-out;
         }
 
         .map-tile {
             width: 512px;
             height: 512px;
-            border: 1px solid #ccc;
             background-color: #f0f0f0;
             position: relative;
+            overflow: hidden;
         }
 
         .map-tile img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            display: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            pointer-events: none;
         }
 
         .coordinates {
@@ -62,6 +66,26 @@
             z-index: 1000;
         }
 
+        .map-point {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .point-label {
+            position: absolute;
+            background: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            transform: translateY(-25px);
+            white-space: nowrap;
+        }
+
         button {
             padding: 5px 10px;
             margin: 0 2px;
@@ -73,6 +97,7 @@
     <div class="coordinates">
         Pozícia: <span id="position">x: 0, y: 0</span><br>
         Zoom: <span id="zoom-level">1.0</span>x
+		<div id="testData" class="test-data"></div>
     </div>
 
     <div class="zoom-controls">
@@ -91,32 +116,79 @@
         const zoomDisplay = document.getElementById('zoom-level');
 
         let isDragging = false;
-        let currentX = 0;
-        let currentY = 0;
+        let currentX = -1024;
+        let currentY = -1024;
         let startX;
         let startY;
         let zoom = 1;
-
+		let sever = 6;
+		let zapad = 3;
+		let juh = 5;
+		let vychod = 2;
+		
+		document.documentElement.style.setProperty('--columns', vychod + zapad);
+		
         // Vytvorenie mapových dielov
         const tiles = [];
-        for (let y = 0; y < 4; y++) {
-            for (let x = 0; x < 4; x++) {
+        for (let y = -sever; y < juh; y++) {
+            for (let x = -zapad; x < vychod; x++) {
                 const tile = document.createElement('div');
                 tile.className = 'map-tile';
-                tile.dataset.x = x;
-                tile.dataset.y = y;
+                
+                const tileX = x * 512;
+                const tileY = y * 512;
+                
+                tile.dataset.x = tileX;
+                tile.dataset.y = tileY;
                 
                 const img = document.createElement('img');
-                img.src = `map_${x}_${y}.webp`;  // Cesta k mapovým dielom
+                img.src = `Data/map_${x}_${y}.webp`;
                 img.alt = `Mapa ${x},${y}`;
+                img.loading = "lazy";
+                img.draggable = false;
                 tile.appendChild(img);
                 
                 mapGrid.appendChild(tile);
                 tiles.push(tile);
             }
         }
+		fetch('body.json')
+			.then(response => response.json())
+			.then(data => {
+				points = data;
+				createMapPoints();
+			});
 
-        // Kontrola viditeľnosti mapových dielov
+        // Vytvorenie a aktualizácia bodov na mape
+        function createMapPoints() {
+            points.forEach(point => {
+                const pointElement = document.createElement('div');
+                pointElement.className = 'map-point';
+                pointElement.id = `point-${point.name}`;
+                
+                const label = document.createElement('div');
+                label.className = 'point-label';
+                label.textContent = point.name;
+                pointElement.appendChild(label);
+                
+                mapGrid.appendChild(pointElement);
+            });
+        }
+
+        function updatePointPositions() {
+            points.forEach(point => {
+                const pointElement = document.getElementById(`point-${point.name}`);
+                if (pointElement) {
+                    // Prepočet pozície bodu vzhľadom na posunutie mapy a zoom
+                    const x = (point.x + 512 * zapad);
+                    const y = (point.y + 512 * sever);
+                    pointElement.style.left = `${x}px`;
+                    pointElement.style.top = `${y}px`;
+                    pointElement.style.transform = `translate(-50%, -50%) scale(${1/zoom})`;
+                }
+            });
+        }
+
         function checkVisibility() {
             const containerRect = mapContainer.getBoundingClientRect();
             
@@ -124,7 +196,6 @@
                 const tileRect = tile.getBoundingClientRect();
                 const img = tile.querySelector('img');
                 
-                // Kontrola prekryvu s viewportom
                 const isVisible = !(
                     tileRect.right < containerRect.left ||
                     tileRect.left > containerRect.right ||
@@ -132,67 +203,100 @@
                     tileRect.top > containerRect.bottom
                 );
                 
-                // Načítanie/odnačítanie obrázka
                 img.style.display = isVisible ? 'block' : 'none';
             });
         }
 
-        function updatePosition(x, y) {
-            const mapX = -x / zoom;
-            const mapY = -y / zoom;
+        function getMouseMapPosition(e) {
+            const rect = mapContainer.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
             
-            positionDisplay.textContent = `x: ${Math.round(mapX)}, y: ${Math.round(mapY)}`;
-            mapGrid.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+            const mapX = Math.round((-currentX + mouseX) / zoom) - 512 * zapad;
+            const mapY = Math.round((-currentY + mouseY) / zoom) - 512 * sever;
             
-            // Kontrola viditeľnosti po každej zmene pozície
-            checkVisibility();
+            positionDisplay.textContent = `x: ${mapX}, y: ${mapY}`;
+            return { mapX, mapY };
         }
 
-        function adjustZoom(delta) {
-            const newZoom = Math.max(0.5, Math.min(4, zoom + delta));
+        function updatePosition(x, y) {
+            currentX = x;
+            currentY = y;
+            mapGrid.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+            updatePointPositions();
+        }
+
+        function adjustZoom(delta, e) {
+            const mousePos = e ? getMouseMapPosition(e) : null;
+            const oldZoom = zoom;
+            const newZoom = Math.max(0.2, Math.min(2, zoom + delta));
+            
             if (newZoom !== zoom) {
                 zoom = newZoom;
                 zoomDisplay.textContent = zoom.toFixed(1);
-                updatePosition(currentX, currentY);
+
+                if (mousePos) {
+                    const zoomFactor = newZoom / oldZoom;
+                    const mouseX = e.clientX - mapContainer.getBoundingClientRect().left;
+                    const mouseY = e.clientY - mapContainer.getBoundingClientRect().top;
+                    
+                    const newX = mouseX - (mouseX - currentX) * zoomFactor;
+                    const newY = mouseY - (mouseY - currentY) * zoomFactor;
+                    
+                    updatePosition(newX, newY);
+                } else {
+                    updatePosition(currentX, currentY);
+                }
             }
         }
 
         mapContainer.addEventListener('wheel', (e) => {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
-            adjustZoom(delta);
+            adjustZoom(delta, e);
         });
 
         mapContainer.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            startX = e.clientX - currentX;
-            startY = e.clientY - currentY;
-            mapContainer.style.cursor = 'grabbing';
+            if (e.button === 0) {
+                isDragging = true;
+                startX = e.clientX - currentX;
+                startY = e.clientY - currentY;
+                mapContainer.style.cursor = 'grabbing';
+            }
         });
 
-        document.addEventListener('mousemove', (e) => {
+        mapContainer.addEventListener('mousemove', (e) => {
+            getMouseMapPosition(e);
+
             if (!isDragging) return;
 
-            let newX = e.clientX - startX;
-            let newY = e.clientY - startY;
-
-            // Upravené limity pre 4x4 mapu
-            const maxOffset = 1024 * zoom;
-            newX = Math.min(maxOffset, Math.max(-maxOffset, newX));
-            newY = Math.min(maxOffset, Math.max(-maxOffset, newY));
-
-            currentX = newX;
-            currentY = newY;
-            updatePosition(currentX, currentY);
+            const newX = e.clientX - startX;
+            const newY = e.clientY - startY;
+            
+            updatePosition(newX, newY);
         });
 
-        document.addEventListener('mouseup', () => {
+        document.addEventListener('mouseup', (e) => {
+            if (e.button === 0) {
+                isDragging = false;
+                mapContainer.style.cursor = 'grab';
+            }
+        });
+
+        mapContainer.addEventListener('mouseleave', () => {
             isDragging = false;
             mapContainer.style.cursor = 'grab';
         });
 
+        mapContainer.addEventListener('selectstart', (e) => {
+            if (isDragging) {
+                e.preventDefault();
+            }
+        });
+
         // Inicializácia
-        checkVisibility();
+        createMapPoints();
+        updatePosition(currentX, currentY);
     </script>
 </body>
 </html>
