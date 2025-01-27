@@ -154,10 +154,10 @@
 		let zapad = 6;
 		let juh = 5;
 		let vychod = 5;
-		let lineStartX = 100;
-        let lineStartY = 400;
-        const lineEndX = -40;
-        const lineEndY = -505;
+		let lineStartX = 0;
+        let lineStartY = 0;
+        let lineEndX = -0;
+        let lineEndY = -0;
 		
 		document.documentElement.style.setProperty('--columns', vychod + zapad);
 		
@@ -194,12 +194,6 @@
 				"type": "home"
 			},
 			{
-				"name": "Eli",
-				"x": 40,
-				"y": -500,
-				"type": "home"
-			},
-			{
 				"name": "Am 1a (92)",
 				"x": 200,
 				"y": -1500,
@@ -225,6 +219,30 @@
 			}
 		];
 
+        function findPoint(name) {
+            return points.find(point => point.name === name);
+        }
+
+        function activateLine() {
+            const point1 = findPoint('Am 1a (92)');
+            const point2 = findPoint('Am 1b (45)');
+            if (point1 && point2) {
+                lineStartX = point1.x;
+                lineStartY = point1.y;
+                lineEndX = point2.x;
+                lineEndY = point2.y;
+                updatePosition(currentX, currentY);
+            }
+        }
+
+        function deactivateLine() {
+            lineStartX = 0;
+            lineStartY = 0;
+            lineEndX = -0;
+            lineEndY = -0;
+            updatePosition(currentX, currentY);
+        }
+
         // Vytvorenie a aktualizácia bodov na mape
         function createMapPoints() {
             points.forEach(point => {
@@ -237,32 +255,9 @@
                 label.textContent = point.name;
                 pointElement.appendChild(label);
                 
-                // Pridáme hover eventy pre bod Am 1a (92)
-                if (point.name === 'Am 1a (92)') {
-                    pointElement.addEventListener('mouseenter', () => {
-                        lineStartX = point.x;
-                        lineStartY = point.y;
-                        updatePosition(currentX, currentY);
-                    });
-                    
-                    pointElement.addEventListener('mouseleave', () => {
-                        lineStartX = 100;
-                        lineStartY = 400;
-                        updatePosition(currentX, currentY);
-                    });
-                }
-				if (point.name === 'Am 2a (71)') {
-                    pointElement.addEventListener('mouseenter', () => {
-                        lineStartX = point.x;
-                        lineStartY = point.y;
-                        updatePosition(currentX, currentY);
-                    });
-                    
-                    pointElement.addEventListener('mouseleave', () => {
-                        lineStartX = 100;
-                        lineStartY = 400;
-                        updatePosition(currentX, currentY);
-                    });
+                if (point.name === 'Am 1a (92)' || point.name === 'Am 1b (45)') {
+                    pointElement.addEventListener('mouseenter', activateLine);
+                    pointElement.addEventListener('mouseleave', deactivateLine);
                 }
                 
                 mapGrid.appendChild(pointElement);
@@ -317,6 +312,7 @@
             currentY = y;
             mapGrid.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
             updatePointPositions();
+            updateLinePosition(mapLine, lineStartX, lineStartY, lineEndX, lineEndY);
         }
 
         function adjustZoom(delta, e) {
