@@ -99,14 +99,26 @@
 		}
 
 		.point-label {
-			position: absolute;
-			background: white;
-			padding: 2px 5px;
-			border-radius: 3px;
-			transform: translateY(-25px);
-			white-space: nowrap;
-			display: none;
-		}
+            position: absolute;
+            background: white;
+            padding: 2px 8px;
+            border-radius: 7px;
+            transform: translateY(-32px);
+            white-space: nowrap;
+            display: none;
+            text-align: center;
+        }
+		
+		.point-name {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 1px;
+        }
+
+        .point-coordinates {
+            font-size: 12px;
+            color: #666;
+        }
 		
 		.map-point:hover .point-label {
 			display: block;  /* Zobrazí sa pri hoveri */
@@ -276,25 +288,35 @@
 
         // Vytvorenie a aktualizácia bodov na mape
         function createMapPoints() {
-			points.forEach(point => {
-				const pointElement = document.createElement('div');
-				pointElement.className = `map-point map-point-${point.type}`;
-				pointElement.id = `point-${point.name}`;
-				
-				const label = document.createElement('div');
-				label.className = 'point-label';
-				label.textContent = point.name;
-				pointElement.appendChild(label);
-				
-				// Add event listeners to all points that are part of connections
-				if (connections.some(conn => conn.from === point.name || conn.to === point.name)) {
-					pointElement.addEventListener('mouseenter', () => activateLine(point.name));
-					pointElement.addEventListener('mouseleave', deactivateLine);
-				}
-				
-				mapGrid.appendChild(pointElement);
-			});
-		}
+            points.forEach(point => {
+                const pointElement = document.createElement('div');
+                pointElement.className = `map-point map-point-${point.type}`;
+                pointElement.id = `point-${point.name}`;
+                
+                const label = document.createElement('div');
+                label.className = 'point-label';
+                
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'point-name';
+                nameDiv.textContent = point.name;
+                
+                const coordsDiv = document.createElement('div');
+                coordsDiv.className = 'point-coordinates';
+                coordsDiv.textContent = `${point.x}/${point.y}`;
+                
+                label.appendChild(nameDiv);
+                label.appendChild(coordsDiv);
+                pointElement.appendChild(label);
+                
+                // Add event listeners to all points that are part of connections
+                if (connections.some(conn => conn.from === point.name || conn.to === point.name)) {
+                    pointElement.addEventListener('mouseenter', () => activateLine(point.name));
+                    pointElement.addEventListener('mouseleave', deactivateLine);
+                }
+                
+                mapGrid.appendChild(pointElement);
+            });
+        }
 
 		function updatePointPositions() {
 			points.forEach(point => {
