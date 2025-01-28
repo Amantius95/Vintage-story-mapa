@@ -238,16 +238,20 @@
 			{ name: 'Amantius', x: -1354, y: -4619, type: 'home'},
 			{ name: 'Am 1a (104)', x: 55, y: -3737, type: 'cyclone1'},
 			{ name: 'Am 1b (29)', x: -6220, y: -1943, type: 'cyclone2'},
-			{ name: 'Am 2a (71)', x: 70, y: 120.5, type: 'cyclone1'},
-			{ name: 'Am 2b (99)', x: 300, y: 400, type: 'cyclone2'},
-			{ name: 'Am 3a (71)', x: -700, y: -120.5, type: 'cyclone1'},
-			{ name: 'Am 3b (99)', x: -300, y: 1400, type: 'cyclone2'},
+			{ name: 'Am 2a (104)', x: 2147, y: -2196, type: 'cyclone1'},
+			{ name: 'Am 2b (13)', x: 7944, y: -8573, type: 'cyclone2'},
+			{ name: 'Am 3a (20)', x: 7944, y: -8446, type: 'cyclone1'},
+			{ name: 'Am 3b (37)', x: 10455, y: -12747, type: 'cyclone2'},
 			{ name: 'Am 4a (91)', x: 96, y: -4251, type: 'cyclone1'},
 			{ name: 'Am 4b (55)', x: 8083, y: -6594, type: 'cyclone2'},
 			{ name: 'Am 5a (58)', x: -795, y: -4505, type: 'cyclone1'},
 			{ name: 'Am 5b (91)', x: -3890, y: -8225, type: 'cyclone2'},
 			{ name: 'Am 6a (98)', x: -1119, y: -4646, type: 'cyclone1'},
-			{ name: 'Am 6b (41)', x: -4262, y: -9652, type: 'cyclone2'}
+			{ name: 'Am 6b (41)', x: -4262, y: -9652, type: 'cyclone2'},
+            { name: 'Am 8a (96)', x: 126, y: -4070, type: 'cyclone1'},
+			{ name: 'Am 8b (25)', x: 6754, y: -7985, type: 'cyclone2'},
+			{ name: 'Am 9a (128)', x: 4053, y: -7, type: 'cyclone1'},
+			{ name: 'Am 9b (20)', x: 5730, y: -7621, type: 'cyclone2'}
 		];
 
         function findPoint(name) {
@@ -255,10 +259,14 @@
         }
 		
 		const connections = [
-            { from: 'Am 1a (92)', to: 'Am 1b (45)' },
-            { from: 'Am 2a (71)', to: 'Am 2b (99)' },
-			{ from: 'Am 3a (71)', to: 'Am 3b (99)' },
-			{ from: 'Am 4a (71)', to: 'Am 4b (99)' }
+            { from: 'Am 1a (104)', to: 'Am 1b (29)' },
+            { from: 'Am 2a (104)', to: 'Am 2b (13)' },
+			{ from: 'Am 3a (20)', to: 'Am 3b (37)' },
+			{ from: 'Am 4a (91)', to: 'Am 4b (55)' }.
+            { from: 'Am 5a (58)', to: 'Am 5b (91)' },
+            { from: 'Am 6a (98)', to: 'Am 6b (41)' },
+			{ from: 'Am 8a (96)', to: 'Am 8b (25)' },
+			{ from: 'Am 9a (128)', to: 'Am 9b (20)' }
         ];
 
         function activateLine(pointName) {
