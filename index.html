@@ -248,10 +248,16 @@
 			{ name: 'Am 5b (91)', x: -3890, y: -8225, type: 'cyclone2'},
 			{ name: 'Am 6a (98)', x: -1119, y: -4646, type: 'cyclone1'},
 			{ name: 'Am 6b (41)', x: -4262, y: -9652, type: 'cyclone2'},
+            { name: 'Am 7a (98)', x: -2605, y: -5199, type: 'cyclone1'},
+			{ name: 'Am 7b (40)', x: -3334, y: 2310, type: 'cyclone2'},
             { name: 'Am 8a (96)', x: 126, y: -4070, type: 'cyclone1'},
 			{ name: 'Am 8b (25)', x: 6754, y: -7985, type: 'cyclone2'},
 			{ name: 'Am 9a (128)', x: 4053, y: -7, type: 'cyclone1'},
-			{ name: 'Am 9b (20)', x: 5730, y: -7621, type: 'cyclone2'}
+			{ name: 'Am 9b (20)', x: 5730, y: -7621, type: 'cyclone2'},
+			{ name: 'E 2a', x: 1907, y: 2017, type: 'cyclone1'},
+			{ name: 'E 2b', x: -3000, y: 3100, type: 'cyclone2'},
+			{ name: 'E 4a (76)', x: 2089, y: 2171, type: 'cyclone1'},
+			{ name: 'E 4b (79)', x: 7984, y: -46, type: 'cyclone2'}
 		];
 
         function findPoint(name) {
@@ -265,8 +271,11 @@
 			{ from: 'Am 4a (91)', to: 'Am 4b (55)' },
             { from: 'Am 5a (58)', to: 'Am 5b (91)' },
             { from: 'Am 6a (98)', to: 'Am 6b (41)' },
+            { from: 'Am 7a (98)', to: 'Am 7b (40)' },
 			{ from: 'Am 8a (96)', to: 'Am 8b (25)' },
-			{ from: 'Am 9a (128)', to: 'Am 9b (20)' }
+			{ from: 'Am 9a (128)', to: 'Am 9b (20)' },
+			{ from: 'E 2a', to: 'E 2b' },
+			{ from: 'E 4a (76)', to: 'E 4b (79)' }
         ];
 
         function activateLine(pointName) {
