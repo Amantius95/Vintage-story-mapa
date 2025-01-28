@@ -4,11 +4,18 @@
     <meta charset="UTF-8">
     <title>Navigácia po mape</title>
     <style>
+		body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
         .map-container {
             position: relative;
-            width: 1024px;
-            height: 600px;
-            margin: 20px auto;
+            width: 80vw;         /* Zmena na relatívnu šírku */
+            height: 90vh;        /* Zmena na relatívnu výšku */
+            margin: 2vh auto;
             border: 2px solid #333;
             overflow: hidden;
             cursor: grab;
@@ -104,12 +111,6 @@
 		.map-point:hover .point-label {
 			display: block;  /* Zobrazí sa pri hoveri */
 		}
-
-        button {
-            padding: 5px 10px;
-            margin: 0 2px;
-            cursor: pointer;
-        }
 		
 		.map-line {
             position: absolute;
@@ -127,11 +128,6 @@
         Pozícia: <span id="position">x: 0, y: 0</span><br>
         Zoom: <span id="zoom-level">1.0</span>x
 		<div id="testData" class="test-data"></div>
-    </div>
-
-    <div class="zoom-controls">
-        <button onclick="adjustZoom(0.1)">+</button>
-        <button onclick="adjustZoom(-0.1)">-</button>
     </div>
 
     <div class="map-container" id="mapContainer">
@@ -158,6 +154,8 @@
         let lineStartY = 0;
         let lineEndX = -0;
         let lineEndY = -0;
+		let mapLines = [];
+		let activeConnections = [];
 		
 		document.documentElement.style.setProperty('--columns', vychod + zapad);
 		
@@ -187,82 +185,75 @@
         }
 		
 		const points = [
-			{
-				"name": "Amantius",
-				"x": 0,
-				"y": 0,
-				"type": "home"
-			},
-			{
-				"name": "Am 1a (92)",
-				"x": 200,
-				"y": -1500,
-				"type": "cyclone1"
-			},
-			{
-				"name": "Am 1b (45)",
-				"x": -80,
-				"y": -70,
-				"type": "cyclone2"
-			},
-			{
-				"name": "Am 2a (71)",
-				"x": 70,
-				"y": 120.5,
-				"type": "cyclone1"
-			},
-			{
-				"name": "Am 2b (99)",
-				"x": 300,
-				"y": 400,
-				"type": "cyclone2"
-			}
+			{ name: 'Amantius', x: 0, y: 0, type: 'home'},
+			{ name: 'MiniM', x: 40, y: -500, type: 'home'},
+			{ name: 'Am 1a (92)', x: 200, y: -1500, type: 'cyclone1' },
+			{ name: 'Am 1b (45)', x: -80, y: -70, type: 'cyclone2'},
+			{ name: 'Am 2a (71)', x: 70, y: 120.5, type: 'cyclone1'},
+			{ name: 'Am 2b (99)', x: 300, y: 400, type: 'cyclone2'},
+			{ name: 'Am 3a (71)', x: -700, y: -120.5, type: 'cyclone1'},
+			{ name: 'Am 3b (99)', x: -300, y: 1400, type: 'cyclone2'}
 		];
 
         function findPoint(name) {
             return points.find(point => point.name === name);
         }
+		
+		const connections = [
+            { from: 'Am 1a (92)', to: 'Am 1b (45)' },
+            { from: 'Am 2a (71)', to: 'Am 2b (99)' },
+			{ from: 'Am 3a (71)', to: 'Am 3b (99)' }
+        ];
 
-        function activateLine() {
-            const point1 = findPoint('Am 1a (92)');
-            const point2 = findPoint('Am 1b (45)');
-            if (point1 && point2) {
-                lineStartX = point1.x;
-                lineStartY = point1.y;
-                lineEndX = point2.x;
-                lineEndY = point2.y;
-                updatePosition(currentX, currentY);
-            }
-        }
+        function activateLine(pointName) {
+			const relevantConnections = connections.filter(conn => 
+				conn.from === pointName || conn.to === pointName
+			);
+			
+			relevantConnections.forEach((connection, index) => {
+				const point1 = findPoint(connection.from);
+				const point2 = findPoint(connection.to);
+				if (point1 && point2) {
+					mapLines[index].style.display = 'block';
+					activeConnections[index] = {
+						startX: point1.x,
+						startY: point1.y,
+						endX: point2.x,
+						endY: point2.y
+					};
+					updateLinePositions();
+				}
+			});
+		}
 
-        function deactivateLine() {
-            lineStartX = 0;
-            lineStartY = 0;
-            lineEndX = -0;
-            lineEndY = -0;
-            updatePosition(currentX, currentY);
-        }
+		function deactivateLine() {
+			mapLines.forEach(line => {
+				line.style.display = 'none';
+			});
+			activeConnections = [];
+		}
 
         // Vytvorenie a aktualizácia bodov na mape
         function createMapPoints() {
-            points.forEach(point => {
-                const pointElement = document.createElement('div');
-                pointElement.className = `map-point map-point-${point.type}`;
-                pointElement.id = `point-${point.name}`;
-                
-                const label = document.createElement('div');
-                label.className = 'point-label';
-                label.textContent = point.name;
-                pointElement.appendChild(label);
-                
-                if (point.name === 'Am 1a (92)' || point.name === 'Am 1b (45)') {
-                    pointElement.addEventListener('mouseenter', activateLine);
-                    pointElement.addEventListener('mouseleave', deactivateLine);
-                }
-                
-                mapGrid.appendChild(pointElement);
-            });
-        }
+			points.forEach(point => {
+				const pointElement = document.createElement('div');
+				pointElement.className = `map-point map-point-${point.type}`;
+				pointElement.id = `point-${point.name}`;
+				
+				const label = document.createElement('div');
+				label.className = 'point-label';
+				label.textContent = point.name;
+				pointElement.appendChild(label);
+				
+				// Add event listeners to all points that are part of connections
+				if (connections.some(conn => conn.from === point.name || conn.to === point.name)) {
+					pointElement.addEventListener('mouseenter', () => activateLine(point.name));
+					pointElement.addEventListener('mouseleave', deactivateLine);
+				}
+				
+				mapGrid.appendChild(pointElement);
+			});
+		}
 
 		function updatePointPositions() {
 			points.forEach(point => {
@@ -307,13 +298,28 @@
             return { mapX, mapY };
         }
 
-        function updatePosition(x, y) {
-            currentX = x;
-            currentY = y;
-            mapGrid.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
-            updatePointPositions();
-            updateLinePosition(mapLine, lineStartX, lineStartY, lineEndX, lineEndY);
-        }
+		function updatePosition(x, y) {
+			currentX = x;
+			currentY = y;
+			mapGrid.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+			updatePointPositions();
+			updateLinePositions();
+		}
+		
+		function updateLinePosition(line, x1, y1, x2, y2) {
+			const startX = ((x1/8) + 512 * zapad) + 128;
+			const startY = ((y1/8) + 512 * sever) + 128;
+			const endX = ((x2/8) + 512 * zapad) + 128;
+			const endY = ((y2/8) + 512 * sever) + 128;
+
+			const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+			const angle = Math.atan2(endY - startY, endX - startX) * 180 / Math.PI;
+
+			line.style.width = `${length}px`;
+            line.style.left = `${startX}px`;
+            line.style.top = `${startY}px`;
+            line.style.transform = `rotate(${angle}deg)`;
+		}
 
         function adjustZoom(delta, e) {
             const mousePos = e ? getMouseMapPosition(e) : null;
@@ -340,37 +346,31 @@
         }
 		
 		// Pridáme funkciu na vytvorenie čiary
-        function createMapLine() {
-            const line = document.createElement('div');
-            line.className = 'map-line';
-            mapGrid.appendChild(line);
-            return line;
-        }
+        function createMapLines() {
+			connections.forEach(() => {
+				const line = document.createElement('div');
+				line.className = 'map-line';
+				line.style.display = 'none'; // Hide by default
+				mapGrid.appendChild(line);
+				mapLines.push(line);
+			});
+		}
 
         // Funkcia na aktualizáciu pozície a rotácie čiary
-        function updateLinePosition(line, x1, y1, x2, y2) {
-            const startX = ((x1/8) + 512 * zapad) + 128;
-            const startY = ((y1/8) + 512 * sever) + 128;
-            const endX = ((x2/8) + 512 * zapad) + 128;
-            const endY = ((y2/8) + 512 * sever) + 128;
-
-            const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
-            const angle = Math.atan2(endY - startY, endX - startX) * 180 / Math.PI;
-
-            line.style.width = `${length}px`;
-            line.style.left = `${startX}px`;
-            line.style.top = `${startY}px`;
-            line.style.transform = `rotate(${angle}deg)`;
-        }
-		
-		// Upravíme funkciu updatePosition
-        function updatePosition(x, y) {
-            currentX = x;
-            currentY = y;
-            mapGrid.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
-            updatePointPositions();
-            updateLinePosition(mapLine, lineStartX, lineStartY, lineEndX, lineEndY);
-        }
+        
+		function updateLinePositions() {
+			activeConnections.forEach((connection, index) => {
+				if (connection) {
+					updateLinePosition(
+						mapLines[index],
+						connection.startX,
+						connection.startY,
+						connection.endX,
+						connection.endY
+					);
+				}
+			});
+		}
 
         mapContainer.addEventListener('wheel', (e) => {
             e.preventDefault();
@@ -417,9 +417,9 @@
         });
 
         // Inicializácia
-		const mapLine = createMapLine();
-        createMapPoints();
-        updatePosition(currentX, currentY);
+        createMapLines();
+		createMapPoints();
+		updatePosition(currentX, currentY);
     </script>
 </body>
 </html>
