@@ -97,6 +97,10 @@
 		.map-point-cyclone2 {
 			background-image: url('Data/Cyclone2.svg');
 		}
+		
+		.map-point-pozor {
+			background-image: url('Data/Pozor.svg');
+		}
 
 		.point-label {
             position: absolute;
@@ -163,6 +167,15 @@
         .search-result-item:hover {
             background-color: #f0f0f0;
         }
+		
+		.tunnel-line {
+			position: absolute;
+			height: 3px;
+			background-color: #b56824;  /* tmavšia farba */
+			transform-origin: 0 50%;
+			pointer-events: none;
+			z-index: 900;
+		}
 		
     </style>
 </head>
@@ -257,7 +270,9 @@
 			{ name: 'E 2a', x: 1907, y: 2017, type: 'cyclone1'},
 			{ name: 'E 2b', x: -3000, y: 3100, type: 'cyclone2'},
 			{ name: 'E 4a (76)', x: 2089, y: 2171, type: 'cyclone1'},
-			{ name: 'E 4b (79)', x: 7984, y: -46, type: 'cyclone2'}
+			{ name: 'E 4b (79)', x: 7984, y: -46, type: 'cyclone2'},
+			{ name: 'Nezačatá stavba', x: -3152, y: 2704, type: 'pozor'},
+			{ name: 'V procese stavby', x: -1840, y: -4956, type: 'pozor'}
 		];
 
         function findPoint(name) {
@@ -277,6 +292,11 @@
 			{ from: 'E 2a', to: 'E 2b' },
 			{ from: 'E 4a (76)', to: 'E 4b (79)' }
         ];
+		
+		const tunnels = [
+			{ T1: { x: -2605, y: -5199 }, T2: { x: -2320, y: -5152 }, T3: { x: -1119, y: -4646 }},
+			{ T1: { x: -3334, y: 2310 }, T2: { x: -3000, y: 3100 }}
+		];
 
         function activateLine(pointName) {
 			const relevantConnections = connections.filter(conn => 
@@ -513,6 +533,72 @@
             }
         }
 		
+		// Vytvorenie elementov pre tunely
+		function createTunnelLines() {
+			tunnels.forEach((tunnel, index) => {
+				const paths = [];
+				// Pre každý úsek tunela vytvoríme čiaru
+				for (let i = 1; i <= Object.keys(tunnel).length - 1; i++) {
+					const line = document.createElement('div');
+					line.className = 'tunnel-line';
+					line.id = `tunnel-${index}-segment-${i}`;
+					mapGrid.appendChild(line);
+					paths.push(line);
+				}
+			});
+		}
+
+		// Aktualizácia pozície tunelových čiar
+		function updateTunnelPositions() {
+			tunnels.forEach((tunnel, tunnelIndex) => {
+				const points = Object.values(tunnel);
+				
+				// Pre každý úsek tunela
+				for (let i = 0; i < points.length - 1; i++) {
+					const start = points[i];
+					const end = points[i + 1];
+					const tunnelLine = document.getElementById(`tunnel-${tunnelIndex}-segment-${i + 1}`);
+					
+					if (tunnelLine) {
+						const startX = ((start.x/8) + 512 * zapad) + 128;
+						const startY = ((start.y/8) + 512 * sever) + 128;
+						const endX = ((end.x/8) + 512 * zapad) + 128;
+						const endY = ((end.y/8) + 512 * sever) + 128;
+
+						const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+						const angle = Math.atan2(endY - startY, endX - startX) * 180 / Math.PI;
+
+						tunnelLine.style.width = `${length}px`;
+						tunnelLine.style.left = `${startX}px`;
+						tunnelLine.style.top = `${startY}px`;
+						// Upravené škálovanie pri zoome
+						tunnelLine.style.transformOrigin = '0 50%';
+						tunnelLine.style.transform = `rotate(${angle}deg)`;
+						// Upravíme hrúbku čiary podľa zoomu
+						tunnelLine.style.height = `${3 / zoom}px`;
+						// Upravíme veľkosť medzier v prerušovanej čiare podľa zoomu
+						tunnelLine.style.background = `repeating-linear-gradient(
+							90deg,
+							#b56824,
+							#b56824 ${10 / zoom}px,
+							transparent ${10 / zoom}px,
+							transparent ${20 / zoom}px
+						)`;
+					}
+				}
+			});
+		}
+
+		// Upravíme existujúcu funkciu updatePosition aby zahŕňala aj aktualizáciu tunelov
+		function updatePosition(x, y) {
+			currentX = x;
+			currentY = y;
+			mapGrid.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+			updatePointPositions();
+			updateLinePositions();
+			updateTunnelPositions();
+		}
+		
 		searchInput.addEventListener('input', (e) => {
             filterPoints(e.target.value);
         });
@@ -570,6 +656,7 @@
 
         // Inicializácia
         createMapLines();
+		createTunnelLines();
 		createMapPoints();
 		updatePosition(currentX, currentY);
     </script>
