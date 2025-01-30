@@ -603,7 +603,7 @@
 		
 		function filterPoints(searchText) {
 			const filtered = points.filter(point => 
-				point.id.toLowerCase().includes(searchText.toLowerCase())
+				point.name.toLowerCase().includes(searchText.toLowerCase()) // Tu zmeňte `point.id` na `point.name`
 			);
 			
 			searchResults.innerHTML = '';
@@ -612,11 +612,11 @@
 				filtered.forEach(point => {
 					const div = document.createElement('div');
 					div.className = 'search-result-item';
-					div.textContent = point.id;
+					div.textContent = point.name; // Tu tiež použite `point.name` miesto `point.id`
 					div.onclick = () => {
 						highlightPoint(point.id);
 						searchResults.style.display = 'none';
-						searchInput.value = point.id;
+						searchInput.value = point.name; // Tu tiež použite `point.name` miesto `point.id`
 					};
 					searchResults.appendChild(div);
 				});
