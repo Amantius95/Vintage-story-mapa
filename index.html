@@ -1,766 +1,752 @@
 <!DOCTYPE html>
 <html lang="sk">
-<head>
-    <meta charset="UTF-8">
-    <title>Navigácia po mape</title>
-    <style>
-		body {
-            margin: 0;
-            padding: 0;
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-        }
-        .map-container {
-            position: relative;
-            width: 80vw;         /* Zmena na relatívnu šírku */
-            height: 90vh;        /* Zmena na relatívnu výšku */
-            margin: 2vh auto;
-            border: 2px solid #333;
-            overflow: hidden;
-            cursor: grab;
-        }
-
-        .map-container:active {
-            cursor: grabbing;
-        }
-
-        .map-grid {
-            position: absolute;
-            display: grid;
-            grid-template-columns: repeat(var(--columns), 512px);
-            grid-template-rows: repeat(512px);
-            transform-origin: 0 0;
-            transition: transform 0.1s ease-out;
-        }
-
-        .map-tile {
-            width: 512px;
-            height: 512px;
-            background-color: #f0f0f0;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .map-tile img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            user-select: none;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            pointer-events: none;
-        }
-
-        .coordinates {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 5px;
-            border-radius: 3px;
-            z-index: 1000;
-        }
-
-        .zoom-controls {
-            position: fixed;
-            right: 10px;
-            top: 10px;
-            background: white;
-            padding: 5px;
-            border-radius: 3px;
-            z-index: 1000;
-        }
-
-		.map-point {
-			position: absolute;
-			width: 20px;
-			height: 20px;
-			transform: translate(-50%, -50%);
-			z-index: 1000;
-			pointer-events: auto;
-			background-size: contain;
-			background-repeat: no-repeat;
-			background-position: center;
-			cursor: pointer;
-		}
-
-		.map-point-home {
-			background-image: url('Data/Home.svg');
-		}
-
-		.map-point-cyclone1 {
-			background-image: url('Data/Cyclone1.svg');
-		}
-
-		.map-point-cyclone2 {
-			background-image: url('Data/Cyclone2.svg');
-		}
-		
-		.map-point-pozor {
-			background-image: url('Data/Pozor.svg');
-		}
-
-		.point-label {
-            position: absolute;
-            background: white;
-            padding: 2px 8px;
-            border-radius: 7px;
-            transform: translateY(-32px);
-            white-space: nowrap;
-            display: none;
-            text-align: center;
-        }
-		
-		.point-name {
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 1px;
-        }
-
-        .point-coordinates {
-            font-size: 12px;
-            color: #666;
-        }
-		
-		.map-point:hover .point-label {
-			display: block;  /* Zobrazí sa pri hoveri */
-		}
-		
-		.map-line {
-            position: absolute;
-            height: 2px;
-            background-color: red;
-            transform-origin: 0 50%;
-            pointer-events: none;
-            z-index: 900;
-        }
-		.search-container {
-            position: fixed;
-            top: 60px;
-            left: 5px;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 5px;
-            border-radius: 3px;
-            z-index: 1000;
-        }
-
-        .search-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            background: white;
-            border: 1px solid #ccc;
-            border-radius: 3px;
-            max-height: 200px;
-            overflow-y: auto;
-            width: 100%;
-            display: none;
-        }
-
-        .search-result-item {
-            padding: 5px;
-            cursor: pointer;
-        }
-
-        .search-result-item:hover {
-            background-color: #f0f0f0;
-        }
-		
-		.tunnel-line {
-			position: absolute;
-			height: 3px;
-			background-color: #b56824;  /* tmavšia farba */
-			transform-origin: 0 50%;
-			pointer-events: none;
-			z-index: 900;
-		}
-		
-    </style>
-</head>
-<body>
-    <div class="coordinates">
-        Pozícia: <span id="position">x: 0, z: 0</span><br>
-        Zoom: <span id="zoom-level">1.0</span>x
-		<div id="testData" class="test-data"></div>
-    </div>
-	
-	<div class="search-container">
-        <input type="text" id="searchInput" placeholder="Vyhľadať bod...">
-        <div id="searchResults" class="search-results"></div>
-    </div>
-
-    <div class="map-container" id="mapContainer">
-        <div class="map-grid" id="mapGrid"></div>
-    </div>
-
-    <script>
-        const mapContainer = document.getElementById('mapContainer');
-        const mapGrid = document.getElementById('mapGrid');
-        const positionDisplay = document.getElementById('position');
-        const zoomDisplay = document.getElementById('zoom-level');
-		const searchInput = document.getElementById('searchInput');
-        const searchResults = document.getElementById('searchResults');
-
-        let isDragging = false;
-        let currentX = -512 * 5.25;
-		let currentZ = -512 * 2.75;
-        let startX;
-        let startZ;
-        let zoom = 1;
-		let sever = 3;
-		let zapad = 6;
-		let juh = 6;
-		let vychod = 5;
-		let lineStartX = 0;
-        let lineStartZ = 0;
-        let lineEndX = -0;
-        let lineEndZ = -0;
-		let mapLines = [];
-		let activeConnections = [];
-		
-		document.documentElement.style.setProperty('--columns', vychod + zapad);
-		
-        // Vytvorenie mapových dielov
-        const tiles = [];
-        for (let z = -sever; z < juh; z++) {
-            for (let x = -zapad; x < vychod; x++) {
-                const tile = document.createElement('div');
-                tile.className = 'map-tile';
-                
-                const tileX = x * 512;
-                const tileZ = z * 512;
-                
-                tile.dataset.x = tileX;
-                tile.dataset.z = tileZ;
-                
-                const img = document.createElement('img');
-                img.src = `Data/map_${x}_${z}.webp`;
-                img.alt = `Mapa ${x},${z}`;
-                img.loading = "lazy";
-                img.draggable = false;
-                tile.appendChild(img);
-                
-                mapGrid.appendChild(tile);
-                tiles.push(tile);
-            }
-        }
-		
-		const points = [
-			{ id: 'a1', name: 'a1', x: 1088, y: 87, z: 611, type: 'cyclone1'},
-			{ id: 'b1', name: 'a2', x: 4036, y: 15, z: 2866, type: 'cyclone2'},
-			{ id: 'a2', name: 'a3', x: -1119, y: 98, z: -4645, type: 'cyclone1'},
-			{ id: 'b2', name: 'a4', x: -4262, y: 41, z: -9651, type: 'cyclone2'},
-			{ id: 'a3', name: 'a5', x: 1194, y: 23, z: -49, type: 'cyclone1'},
-			{ id: 'b3', name: 'a6', x: 283, y: 93, z: -6675, type: 'cyclone2'},
-			{ id: 'a4', name: 'a7', x: -1228, y: 93, z: 1004, type: 'cyclone1'},
-			{ id: 'b4', name: 'a8', x: 1029, y: 79, z: -6309, type: 'cyclone2'},
-			{ id: 'a5', name: 'a9', x: 1252, y: 45, z: 387, type: 'cyclone1'},
-			{ id: 'b5', name: 'a10', x: 5075, y: 12, z: 6501, type: 'cyclone2'},
-			{ id: 'a6', name: 'a11', x: 126, y: 96, z: -4071, type: 'cyclone1'},
-			{ id: 'b6', name: 'a12', x: 6754, y: 25, z: -7986, type: 'cyclone2'},
-			{ id: 'a7', name: 'a13', x: 1275, y: 61, z: 287, type: 'cyclone1'},
-			{ id: 'b7', name: 'a14', x: -5113, y: 25, z: -3917, type: 'cyclone2'},
-			{ id: 'a8', name: 'a15', x: -1359, y: 101, z: -4619, type: 'cyclone1'},
-			{ id: 'b8', name: 'a16', x: 1972, y: 77, z: -12216, type: 'cyclone2'},
-			{ id: 'a9', name: 'a17', x: 14134, y: 77, z: 7084, type: 'cyclone1'},
-			{ id: 'b9', name: 'a18', x: 17667, y: 13, z: -396, type: 'cyclone2'},
-			{ id: 'a10', name: 'a19', x: 1429, y: 90, z: 4827, type: 'cyclone1'},
-			{ id: 'b10', name: 'a20', x: -4270, y: 44, z: 10884, type: 'cyclone2'},
-			{ id: 'a11', name: 'a21', x: -16264, y: 55, z: 8746, type: 'cyclone1'},
-			{ id: 'b11', name: 'a22', x: -20685, y: 97, z: 16173, type: 'cyclone2'},
-			{ id: 'a12', name: 'a23', x: -1766, y: 22, z: 7326, type: 'cyclone1'},
-			{ id: 'b12', name: 'a24', x: -8913, y: 64, z: 15210, type: 'cyclone2'},
-			{ id: 'a13', name: 'a25', x: 1908, y: 61, z: 2015, type: 'cyclone1'},
-			{ id: 'b13', name: 'a26', x: -3013, y: 87, z: 3122, type: 'cyclone2'},
-			{ id: 'a14', name: 'a27', x: 1921, y: 96, z: 2023, type: 'cyclone1'},
-			{ id: 'b14', name: 'a28', x: -1758, y: 28, z: 7314, type: 'cyclone2'},
-			{ id: 'a15', name: 'a29', x: 2089, y: 76, z: 2170, type: 'cyclone1'},
-			{ id: 'b15', name: 'a30', x: 7985, y: 77, z: -47, type: 'cyclone2'},
-			{ id: 'a16', name: 'a31', x: -2094, y: 67, z: -5136, type: 'cyclone1'},
-			{ id: 'b16', name: 'a32', x: 2553, y: 70, z: -7879, type: 'cyclone2'},
-			{ id: 'a17', name: 'a33', x: 2133, y: 23, z: 2114, type: 'cyclone1'},
-			{ id: 'b17', name: 'a34', x: -2795, y: 61, z: -1620, type: 'cyclone2'},
-			{ id: 'a18', name: 'a35', x: 2148, y: 104, z: -2196, type: 'cyclone1'},
-			{ id: 'b18', name: 'a36', x: 7944, y: 13, z: -8571, type: 'cyclone2'},
-			{ id: 'a19', name: 'a37', x: 2224, y: 55, z: 1946, type: 'cyclone1'},
-			{ id: 'b19', name: 'a38', x: -3379, y: 85, z: -752, type: 'cyclone2'},
-			{ id: 'a20', name: 'a39', x: -2455, y: 40, z: 18050, type: 'cyclone1'},
-			{ id: 'b20', name: 'a40', x: -7470, y: 101, z: 18822, type: 'cyclone2'},
-			{ id: 'a21', name: 'a41', x: -2475, y: 31, z: 18069, type: 'cyclone1'},
-			{ id: 'b21', name: 'a42', x: -8856, y: 70, z: 21100, type: 'cyclone2'},
-			{ id: 'a22', name: 'a43', x: 2602, y: 104, z: 2561, type: 'cyclone1'},
-			{ id: 'b22', name: 'a44', x: -4968, y: 63, z: 6002, type: 'cyclone2'},
-			{ id: 'a23', name: 'a45', x: -2604, y: 98, z: -5199, type: 'cyclone1'},
-			{ id: 'b23', name: 'a46', x: -3334, y: 40, z: 2309, type: 'cyclone2'},
-			{ id: 'a24', name: 'a47', x: -2806, y: 26, z: -1642, type: 'cyclone1'},
-			{ id: 'b24', name: 'a48', x: 4945, y: 54, z: -4777, type: 'cyclone2'},
-			{ id: 'a25', name: 'a49', x: 4054, y: 128, z: -7, type: 'cyclone1'},
-			{ id: 'b25', name: 'a50', x: 5731, y: 20, z: -7620, type: 'cyclone2'},
-			{ id: 'a26', name: 'a51', x: -408, y: 78, z: 1326, type: 'cyclone1'},
-			{ id: 'b26', name: 'a52', x: 83, y: 67, z: -3218, type: 'cyclone2'},
-			{ id: 'a27', name: 'a53', x: -4136, y: 113, z: 11046, type: 'cyclone1'},
-			{ id: 'b27', name: 'a54', x: -5149, y: 62, z: 12731, type: 'cyclone2'},
-			{ id: 'a28', name: 'a55', x: -4274, y: 78, z: 6548, type: 'cyclone1'},
-			{ id: 'b28', name: 'a56', x: -5053, y: 22, z: 1689, type: 'cyclone2'},
-			{ id: 'a29', name: 'a57', x: -4284, y: 61, z: 10992, type: 'cyclone1'},
-			{ id: 'b29', name: 'a58', x: -2524, y: 25, z: 18065, type: 'cyclone2'},
-			{ id: 'a30', name: 'a59', x: -5042, y: 123, z: 7573, type: 'cyclone1'},
-			{ id: 'b30', name: 'a60', x: -548, y: 78, z: 10694, type: 'cyclone2'},
-			{ id: 'a31', name: 'a61', x: -5206, y: 93, z: 1765, type: 'cyclone1'},
-			{ id: 'b31', name: 'a62', x: -8609, y: 54, z: 5419, type: 'cyclone2'},
-			{ id: 'a32', name: 'a63', x: 54, y: 104, z: -3737, type: 'cyclone1'},
-			{ id: 'b32', name: 'a64', x: -6221, y: 29, z: -1943, type: 'cyclone2'},
-			{ id: 'a33', name: 'a65', x: -5993, y: 95, z: 7840, type: 'cyclone1'},
-			{ id: 'b33', name: 'a66', x: -5145, y: 122, z: 287, type: 'cyclone2'},
-			{ id: 'a34', name: 'a67', x: -6185, y: 93, z: 8628, type: 'cyclone1'},
-			{ id: 'b34', name: 'a68', x: -4362, y: 55, z: 7968, type: 'cyclone2'},
-			{ id: 'a35', name: 'a69', x: 7444, y: 92, z: 2385, type: 'cyclone1'},
-			{ id: 'b35', name: 'a70', x: 14122, y: 76, z: 7099, type: 'cyclone2'},
-			{ id: 'a36', name: 'a71', x: 7944, y: 20, z: -8447, type: 'cyclone1'},
-			{ id: 'b36', name: 'a72', x: 10455, y: 37, z: -12748, type: 'cyclone2'},
-			{ id: 'a37', name: 'a73', x: -796, y: 58, z: -4505, type: 'cyclone1'},
-			{ id: 'b37', name: 'a74', x: -3891, y: 91, z: -8225, type: 'cyclone2'},
-			{ id: 'a38', name: 'a75', x: -8101, y: 116, z: 6831, type: 'cyclone1'},
-			{ id: 'b38', name: 'a76', x: -15800, y: 87, z: 8521, type: 'cyclone2'},
-			{ id: 'a39', name: 'a77', x: 8235, y: 113, z: -72, type: 'cyclone1'},
-			{ id: 'b39', name: 'a78', x: 14925, y: 77, z: -624, type: 'cyclone2'},
-			{ id: 'a40', name: 'a79', x: 843, y: 79, z: 5071, type: 'cyclone1'},
-			{ id: 'b40', name: 'a80', x: 5898, y: 83, z: 7042, type: 'cyclone2'},
-			{ id: 'a41', name: 'a81', x: 8443, y: 86, z: 189, type: 'cyclone1'},
-			{ id: 'b41', name: 'a82', x: 564, y: 50, z: 1123, type: 'cyclone2'},
-			{ id: 'a42', name: 'a83', x: 8459, y: 94, z: 213, type: 'cyclone1'},
-			{ id: 'b42', name: 'a84', x: 6760, y: 62, z: 7267, type: 'cyclone2'},
-			{ id: 'a43', name: 'a85', x: 92, y: 115, z: 1429, type: 'cyclone1'},
-			{ id: 'b43', name: 'a86', x: -6288, y: 99, z: 746, type: 'cyclone2'},
-			{ id: 'a44', name: 'a87', x: -949, y: 96, z: 1534, type: 'cyclone1'},
-			{ id: 'b44', name: 'a88', x: 4407, y: 17, z: -1533, type: 'cyclone2'},
-			{ id: 'a45', name: 'a89', x: 95, y: 91, z: -4251, type: 'cyclone1'},
-			{ id: 'b45', name: 'a90', x: 8083, y: 55, z: -6593, type: 'cyclone2'},
-			{ id: 'a46', name: 'a91', x: 965, y: 69, z: 540, type: 'cyclone1'},
-			{ id: 'b46', name: 'a92', x: -4132, y: 41, z: 6476, type: 'cyclone2'},
-			{ id: 'a47', name: 'a93', x: 987, y: 38, z: 852, type: 'cyclone1'},
-			{ id: 'b47', name: 'a94', x: 1892, y: 47, z: -6763, type: 'cyclone2'}
-		];
-
-        function findPoint(id) {
-			return points.find(point => point.id === id);
-		}
-		
-		const connections = [
-            { from: 'a1', to: 'b1' },
-			{ from: 'a2', to: 'b2' },
-			{ from: 'a3', to: 'b3' },
-			{ from: 'a4', to: 'b4' },
-            { from: 'a5', to: 'b5' },
-			{ from: 'a6', to: 'b6' },
-			{ from: 'a7', to: 'b7' },
-			{ from: 'a8', to: 'b8' },
-			{ from: 'a9', to: 'b9' },
-			{ from: 'a10', to: 'b10' },
-			{ from: 'a11', to: 'b11' },
-			{ from: 'a12', to: 'b12' },
-			{ from: 'a13', to: 'b13' },
-			{ from: 'a14', to: 'b14' },
-            { from: 'a15', to: 'b15' },
-			{ from: 'a16', to: 'b16' },
-			{ from: 'a17', to: 'b17' },
-			{ from: 'a18', to: 'b18' },
-			{ from: 'a19', to: 'b19' },
-			{ from: 'a20', to: 'b20' },
-			{ from: 'a21', to: 'b21' },
-			{ from: 'a22', to: 'b22' },
-			{ from: 'a23', to: 'b23' },
-			{ from: 'a24', to: 'b24' },
-            { from: 'a25', to: 'b25' },
-			{ from: 'a26', to: 'b26' },
-			{ from: 'a27', to: 'b27' },
-			{ from: 'a28', to: 'b28' },
-			{ from: 'a29', to: 'b29' },
-			{ from: 'a30', to: 'b30' },
-			{ from: 'a31', to: 'b31' },
-			{ from: 'a32', to: 'b32' },
-			{ from: 'a33', to: 'b33' },
-			{ from: 'a34', to: 'b34' },
-            { from: 'a35', to: 'b35' },
-			{ from: 'a36', to: 'b36' },
-			{ from: 'a37', to: 'b37' },
-			{ from: 'a38', to: 'b38' },
-			{ from: 'a39', to: 'b39' },
-			{ from: 'a40', to: 'b40' },
-			{ from: 'a41', to: 'b41' }
-        ];
-		
-		const tunnels = [
-			{ T1: { x: -2605, z: -5199 }, T2: { x: -2320, z: -5152 }, T3: { x: -1119, z: -4646 }},
-			{ T1: { x: -3334, z: 2310 }, T2: { x: -3000, z: 3100 }}
-		];
-
-        function activateLine(pointId) {
-			const relevantConnections = connections.filter(conn => 
-				conn.from === pointId || conn.to === pointId
-			);
-			
-			relevantConnections.forEach((connection, index) => {
-				const point1 = findPoint(connection.from);
-				const point2 = findPoint(connection.to);
-				if (point1 && point2) {
-					mapLines[index].style.display = 'block';
-					activeConnections[index] = {
-						startX: point1.x,
-						startZ: point1.z,
-						endX: point2.x,
-						endZ: point2.z
-					};
-					updateLinePositions();
-				}
-			});
-		}
-
-		function deactivateLine() {
-			mapLines.forEach(line => {
-				line.style.display = 'none';
-			});
-			activeConnections = [];
-		}
-
-        // Vytvorenie a aktualizácia bodov na mape
-        function createMapPoints() {
-			points.forEach(point => {
-				const pointElement = document.createElement('div');
-				pointElement.className = `map-point map-point-${point.type}`;
-				pointElement.id = `point-${point.id}`;
-				
-				const label = document.createElement('div');
-				label.className = 'point-label';
-				
-				const nameDiv = document.createElement('div');
-				nameDiv.className = 'point-name';
-				nameDiv.textContent = point.name;
-				
-				const coordsDiv = document.createElement('div');
-				coordsDiv.className = 'point-coordinates';
-				coordsDiv.textContent = `${point.x}/${point.y}/${point.z}`;
-				
-				label.appendChild(nameDiv);
-				label.appendChild(coordsDiv);
-				pointElement.appendChild(label);
-				
-				// Add event listeners to all points that are part of connections
-				if (connections.some(conn => conn.from === point.id || conn.to === point.id)) {
-					pointElement.addEventListener('mouseenter', () => activateLine(point.id));
-					pointElement.addEventListener('mouseleave', deactivateLine);
-				}
-				
-				mapGrid.appendChild(pointElement);
-			});
-		}
-
-		function updatePointPositions() {
-			points.forEach(point => {
-				const pointElement = document.getElementById(`point-${point.id}`);
-				if (pointElement) {
-					const x = (((point.x /8) + 512 * zapad) + 128);
-					const z = (((point.z /8) + 512 * sever) + 128);
-					pointElement.style.left = `${x}px`;
-					pointElement.style.top = `${z}px`;
-					pointElement.style.transform = `translate(-50%, -50%) scale(${1/zoom})`;
-				}
-			});
-		}
-
-        function checkVisibility() {
-            const containerRect = mapContainer.getBoundingClientRect();
-            
-            tiles.forEach(tile => {
-                const tileRect = tile.getBoundingClientRect();
-                const img = tile.querySelector('img');
-                
-                const isVisible = !(
-                    tileRect.right < containerRect.left ||
-                    tileRect.left > containerRect.right ||
-                    tileRect.bottom < containerRect.top ||
-                    tileRect.top > containerRect.bottom
-                );
-                
-                img.style.display = isVisible ? 'block' : 'none';
-            });
-        }
-
-		function getMouseMapPosition(e) {
-			const rect = mapContainer.getBoundingClientRect();
-			const mouseX = e.clientX - rect.left;
-			const mouseY = e.clientY - rect.top;
-			
-			// Prepočet na mapové súradnice
-			const mapX = Math.round(((mouseX - currentX) / zoom - 512 * zapad) * 8 - 1024);
-			const mapZ = Math.round(((mouseY - currentZ) / zoom - 512 * sever) * 8 - 1024);
-			
-			// Aktualizácia zobrazenia súradníc
-			positionDisplay.textContent = `x: ${mapX}, z: ${mapZ}`;
-			return { mapX, mapZ };
-		}
-
-		function updatePosition(x, z) {
-			currentX = x;
-			currentZ = z;
-			mapGrid.style.transform = `translate(${x}px, ${z}px) scale(${zoom})`;
-			updatePointPositions();
-			updateLinePositions();
-			updateTunnelPositions();
-		}
-		
-		function updateLinePosition(line, x1, z1, x2, z2) {
-			const startX = ((x1/8) + 512 * zapad) + 128;
-			const startZ = ((z1/8) + 512 * sever) + 128;
-			const endX = ((x2/8) + 512 * zapad) + 128;
-			const endZ = ((z2/8) + 512 * sever) + 128;
-
-			const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endZ - startZ, 2));
-			const angle = Math.atan2(endZ - startZ, endX - startX) * 180 / Math.PI;
-
-			line.style.width = `${length}px`;
-            line.style.left = `${startX}px`;
-            line.style.top = `${startZ}px`;
-            line.style.transform = `rotate(${angle}deg)`;
-		}
-
-        function adjustZoom(delta, e) {
-            const mousePos = e ? getMouseMapPosition(e) : null;
-            const oldZoom = zoom;
-            const newZoom = Math.max(0.2, Math.min(8, zoom + delta));
-            
-            if (newZoom !== zoom) {
-                zoom = newZoom;
-                zoomDisplay.textContent = zoom.toFixed(1);
-
-                if (mousePos) {
-                    const zoomFactor = newZoom / oldZoom;
-                    const mouseX = e.clientX - mapContainer.getBoundingClientRect().left;
-                    const mouseZ = e.clientY - mapContainer.getBoundingClientRect().top;
-                    
-                    const newX = mouseX - (mouseX - currentX) * zoomFactor;
-                    const newZ = mouseZ - (mouseZ - currentZ) * zoomFactor;
-                    
-                    updatePosition(newX, newZ);
-                } else {
-                    updatePosition(currentX, currentZ);
-                }
-            }
-        }
-		
-		// Pridáme funkciu na vytvorenie čiary
-        function createMapLines() {
-			connections.forEach(() => {
-				const line = document.createElement('div');
-				line.className = 'map-line';
-				line.style.display = 'none'; // Hide by default
-				mapGrid.appendChild(line);
-				mapLines.push(line);
-			});
-		}
-
-        // Funkcia na aktualizáciu pozície a rotácie čiary
-        
-		function updateLinePositions() {
-			activeConnections.forEach((connection, index) => {
-				if (connection) {
-					updateLinePosition(
-						mapLines[index],
-						connection.startX,
-						connection.startZ,
-						connection.endX,
-						connection.endZ
-					);
-				}
-			});
-		}
-		
-		function highlightPoint(pointId) {
-			// Najprv zrušíme všetky zvýraznenia
-			points.forEach(point => {
-				const pointElement = document.getElementById(`point-${point.id}`);
-				if (pointElement) {
-					pointElement.style.transform = `translate(-50%, -50%) scale(${1/zoom})`;
-				}
-			});
-
-			 // Zvýrazníme vyhľadaný bod
-			const pointElement = document.getElementById(`point-${pointId}`);
-			if (pointElement) {
-				pointElement.style.transform = `translate(-50%, -50%) scale(${1.5/zoom})`;
-				
-				// Vycentrujeme mapu na bod
-				const point = points.find(p => p.id === pointId);
-				if (point) {
-					const containerWidth = mapContainer.offsetWidth;
-					const containerHeight = mapContainer.offsetHeight;
-					
-					// Vypočítame pozíciu bodu v pixeloch
-					const pointPixelX = ((point.x /8) + 512 * zapad) + 128;
-					const pointPixelZ = ((point.z /8) + 512 * sever) + 128;
-					
-					// Vypočítame novú pozíciu pre vycentrovanie
-					const newX = -(pointPixelX * zoom - containerWidth/2);
-					const newZ = -(pointPixelZ * zoom - containerHeight/2);
-					
-					updatePosition(newX, newZ);
-				}
+    <head>
+	    <meta charset="UTF-8">
+		<title>Navigácia po mape</title>
+		<style>
+			body {
+				margin: 0;
+				padding: 0;
+				width: 100vw;
+				height: 100vh;
+				overflow: hidden;
 			}
-		}
+			.map-container {
+				position: relative;
+				width: 80vw;         /* Zmena na relatívnu šírku */
+				height: 90vh;        /* Zmena na relatívnu výšku */
+				margin: 2vh auto;
+				border: 2px solid #333;
+				overflow: hidden;
+				cursor: grab;
+			}
+
+			.map-container:active {
+				cursor: grabbing;
+			}
+
+			.map-grid {
+				position: absolute;
+				display: grid;
+				grid-template-columns: repeat(var(--columns), 512px);
+				grid-template-rows: repeat(512px);
+				transform-origin: 0 0;
+				transition: transform 0.1s ease-out;
+			}
+
+			.map-tile {
+				width: 512px;
+				height: 512px;
+				background-color: #f0f0f0;
+				position: relative;
+				overflow: hidden;
+			}
+
+			.map-tile img {
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+				user-select: none;
+				-webkit-user-select: none;
+				-moz-user-select: none;
+				-ms-user-select: none;
+				pointer-events: none;
+			}
+
+			.coordinates {
+				position: fixed;
+				top: 10px;
+				left: 10px;
+				background: rgba(255, 255, 255, 0.8);
+				padding: 5px;
+				border-radius: 3px;
+				z-index: 1000;
+			}
+
+			.zoom-controls {
+				position: fixed;
+				right: 10px;
+				top: 10px;
+				background: white;
+				padding: 5px;
+				border-radius: 3px;
+				z-index: 1000;
+			}
+
+			.map-point {
+				position: absolute;
+				width: 20px;
+				height: 20px;
+				transform: translate(-50%, -50%);
+				z-index: 1000;
+				pointer-events: auto;
+				background-size: contain;
+				background-repeat: no-repeat;
+				background-position: center;
+				cursor: pointer;
+			}
+
+			.map-point-home {
+				background-image: url('Data/Home.svg');
+			}
+
+			.map-point-cyclone1 {
+				background-image: url('Data/Cyclone1.svg');
+			}
+
+			.map-point-cyclone2 {
+				background-image: url('Data/Cyclone2.svg');
+			}
+			
+			.map-point-pozor {
+				background-image: url('Data/Pozor.svg');
+			}
+
+			.point-label {
+				position: absolute;
+				background: white;
+				padding: 2px 8px;
+				border-radius: 7px;
+				transform: translateY(-32px);
+				white-space: nowrap;
+				display: none;
+				text-align: center;
+			}
+			
+			.point-name {
+				font-size: 14px;
+				font-weight: bold;
+				margin-bottom: 1px;
+			}
+
+			.point-coordinates {
+				font-size: 12px;
+				color: #666;
+			}
+			
+			.map-point:hover .point-label {
+				display: block;  /* Zobrazí sa pri hoveri */
+			}
+			
+			.map-line {
+				position: absolute;
+				height: 2px;
+				background-color: red;
+				transform-origin: 0 50%;
+				pointer-events: none;
+				z-index: 900;
+			}
+			.search-container {
+				position: fixed;
+				top: 60px;
+				left: 5px;
+				background: rgba(255, 255, 255, 0.8);
+				padding: 5px;
+				border-radius: 3px;
+				z-index: 1000;
+			}
+
+			.search-results {
+				position: absolute;
+				top: 100%;
+				left: 0;
+				background: white;
+				border: 1px solid #ccc;
+				border-radius: 3px;
+				max-height: 200px;
+				overflow-y: auto;
+				width: 100%;
+				display: none;
+			}
+
+			.search-result-item {
+				padding: 5px;
+				cursor: pointer;
+			}
+
+			.search-result-item:hover {
+				background-color: #f0f0f0;
+			}
+			
+			.tunnel-line {
+				position: absolute;
+				height: 3px;
+				background-color: #b56824;  /* tmavšia farba */
+				transform-origin: 0 50%;
+				pointer-events: none;
+				z-index: 900;
+			}
+			
+		</style>
+    </head>
+    <body onload="loadAll()">
+        <div id="firstData"></div>
+        <div id="secondData"></div>
+        <div id="thirdData"></div>
+		<div class="coordinates">
+			Pozícia: <span id="position">x: 0, z: 0</span><br>
+			Zoom: <span id="zoom-level">1.0</span>x
+			<div id="testData" class="test-data"></div>
+		</div>
 		
-		function filterPoints(searchText) {
-			const filtered = points.filter(point => 
-				point.name.toLowerCase().includes(searchText.toLowerCase()) // Tu zmeňte `point.id` na `point.name`
-			);
-			
-			searchResults.innerHTML = '';
-			
-			if (filtered.length > 0 && searchText.length > 0) {
-				filtered.forEach(point => {
-					const div = document.createElement('div');
-					div.className = 'search-result-item';
-					div.textContent = point.name; // Tu tiež použite `point.name` miesto `point.id`
-					div.onclick = () => {
-						highlightPoint(point.id);
-						searchResults.style.display = 'none';
-						searchInput.value = point.name; // Tu tiež použite `point.name` miesto `point.id`
-					};
-					searchResults.appendChild(div);
+		<div class="search-container">
+			<input type="text" id="searchInput" placeholder="Vyhľadať bod...">
+			<div id="searchResults" class="search-results"></div>
+		</div>
+
+		<div class="map-container" id="mapContainer">
+			<div class="map-grid" id="mapGrid"></div>
+		</div>
+
+		<script type="text/javascript">
+		
+			async function loadFirst() {
+				const response = await fetch('first.json');
+				const data = await response.json();
+				const divFirst = document.getElementById('firstData');
+				
+				data.forEach((item, index) => {
+					const paragraph = document.createElement('p');
+					paragraph.className = 'inner';
+					
+					// Vypočítame číslo páru (1, 2, 3, ...) na základe indexu
+					const pairNumber = Math.floor(index / 2) + 1;
+					// Určíme či ide o prvý (a) alebo druhý (b) bod v páre
+					const pairLetter = index % 2 === 0 ? 'a' : 'b';
+					// Vytvoríme ID v požadovanom formáte (a1, b1, a2, b2, ...)
+					const customId = `${pairLetter}${pairNumber}`;
+					
 				});
-				searchResults.style.display = 'block';
-			} else {
-				searchResults.style.display = 'none';
 			}
-		}
-		
-		// Vytvorenie elementov pre tunely
-		function createTunnelLines() {
-			tunnels.forEach((tunnel, index) => {
-				const paths = [];
-				// Pre každý úsek tunela vytvoríme čiaru
-				for (let i = 1; i <= Object.keys(tunnel).length - 1; i++) {
-					const line = document.createElement('div');
-					line.className = 'tunnel-line';
-					line.id = `tunnel-${index}-segment-${i}`;
-					mapGrid.appendChild(line);
-					paths.push(line);
-				}
-			});
-		}
 
-		// Aktualizácia pozície tunelových čiar
-		function updateTunnelPositions() {
-			tunnels.forEach((tunnel, tunnelIndex) => {
-				const points = Object.values(tunnel);
+            async function loadThird() {
+				const response = await fetch('third.json');
+				const data = await response.json();
 				
-				// Pre každý úsek tunela
-				for (let i = 0; i < points.length - 1; i++) {
-					const start = points[i];
-					const end = points[i + 1];
-					const tunnelLine = document.getElementById(`tunnel-${tunnelIndex}-segment-${i + 1}`);
+				sever = parseInt(data.mapBounds.sever);
+				zapad = parseInt(data.mapBounds.zapad);
+				juh = parseInt(data.mapBounds.juh);
+				vychod = parseInt(data.mapBounds.vychod);
+			}
+			
+			async function loadMapPoints() {
+				const response = await fetch('first.json');
+				const data = await response.json();
+				
+				// Transformácia dát do poľa bodov s typom 'cyclone1'
+				const points = data.map((item, index) => {
+					// Určenie typu bodu na základe indexu (striedanie medzi cyclone1 a cyclone2)
+					const type = index % 2 === 0 ? 'cyclone1' : 'cyclone2';
 					
-					if (tunnelLine) {
-						const startX = ((start.x/8) + 512 * zapad) + 128;
-						const startZ = ((start.z/8) + 512 * sever) + 128;
-						const endX = ((end.x/8) + 512 * zapad) + 128;
-						const endZ = ((end.z/8) + 512 * sever) + 128;
+					// Vytvorenie objektu bodu so všetkými pôvodnými vlastnosťami plus typ
+					return {
+						id: `${index % 2 === 0 ? 'a' : 'b'}${Math.floor(index / 2) + 1}`,
+						name: item.name,
+						x: item.x,
+						y: item.y,
+						z: item.z,
+						type: type
+					};
+				});
 
-						const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endZ - startZ, 2));
-						const angle = Math.atan2(endZ - startZ, endX - startX) * 180 / Math.PI;
+				// Nahradenie globálneho poľa bodov
+				window.points = points;
 
-						tunnelLine.style.width = `${length}px`;
-						tunnelLine.style.left = `${startX}px`;
-						tunnelLine.style.top = `${startZ}px`;
-						// Upravené škálovanie pri zoome
-						tunnelLine.style.transformOrigin = '0 50%';
-						tunnelLine.style.transform = `rotate(${angle}deg)`;
-						// Upravíme hrúbku čiary podľa zoomu
-						tunnelLine.style.height = `${3 / zoom}px`;
-						// Upravíme veľkosť medzier v prerušovanej čiare podľa zoomu
-						tunnelLine.style.background = `repeating-linear-gradient(
-							90deg,
-							#b56824,
-							#b56824 ${10 / zoom}px,
-							transparent ${10 / zoom}px,
-							transparent ${20 / zoom}px
-						)`;
+				// Automatické vytvorenie spojení
+				window.connections = createConnections(points);
+
+				// Opätovné vytvorenie mapových bodov po načítaní
+				createMapPoints();
+			}
+
+
+            async function loadAll() {
+				try {
+					await Promise.all([
+						loadFirst(),
+						loadThird(),
+						loadMapPoints() // Pridanie tejto riadky
+					]);
+					// Po načítaní všetkých dát inicializujte mapu
+					initializeMap();
+				} catch (error) {
+					console.error('Chyba pri načítaní dát:', error);
+				}
+			}
+		
+			const mapContainer = document.getElementById('mapContainer');
+			const mapGrid = document.getElementById('mapGrid');
+			const positionDisplay = document.getElementById('position');
+			const zoomDisplay = document.getElementById('zoom-level');
+			const searchInput = document.getElementById('searchInput');
+			const searchResults = document.getElementById('searchResults');
+
+			let isDragging = false;
+			let currentX = -512 * 5.25;
+			let currentZ = -512 * 2.75;
+			let startX;
+			let startZ;
+			let zoom = 1;
+			let sever = 1;
+			let zapad = 1;
+			let juh = 1;
+			let vychod = 1;
+			let lineStartX = 0;
+			let lineStartZ = 0;
+			let lineEndX = -0;
+			let lineEndZ = -0;
+			let mapLines = [];
+			let activeConnections = [];
+			
+			// Vytvorenie mapových dielov
+			const tiles = [];
+
+			function findPoint(id) {
+				return points.find(point => point.id === id);
+			}
+			
+			const tunnels = [
+				{ T1: { x: -2605, z: -5199 }, T2: { x: -2320, z: -5152 }, T3: { x: -1119, z: -4646 }},
+				{ T1: { x: -3334, z: 2310 }, T2: { x: -3000, z: 3100 }}
+			];
+
+			function activateLine(pointId) {
+				const relevantConnections = connections.filter(conn => 
+					conn.from === pointId || conn.to === pointId
+				);
+				
+				relevantConnections.forEach((connection, index) => {
+					const point1 = findPoint(connection.from);
+					const point2 = findPoint(connection.to);
+					if (point1 && point2) {
+						mapLines[index].style.display = 'block';
+						activeConnections[index] = {
+							startX: point1.x,
+							startZ: point1.z,
+							endX: point2.x,
+							endZ: point2.z
+						};
+						updateLinePositions();
+					}
+				});
+			}
+
+			function deactivateLine() {
+				mapLines.forEach(line => {
+					line.style.display = 'none';
+				});
+				activeConnections = [];
+			}
+
+			// Vytvorenie a aktualizácia bodov na mape
+			function createMapPoints() {
+				points.forEach(point => {
+					const pointElement = document.createElement('div');
+					pointElement.className = `map-point map-point-${point.type}`;
+					pointElement.id = `point-${point.id}`;
+					
+					const label = document.createElement('div');
+					label.className = 'point-label';
+					
+					const nameDiv = document.createElement('div');
+					nameDiv.className = 'point-name';
+					nameDiv.textContent = point.name;
+					
+					const coordsDiv = document.createElement('div');
+					coordsDiv.className = 'point-coordinates';
+					coordsDiv.textContent = `${point.x}/${point.y}/${point.z}`;
+					
+					label.appendChild(nameDiv);
+					label.appendChild(coordsDiv);
+					pointElement.appendChild(label);
+					
+					// Add event listeners to all points that are part of connections
+					if (connections.some(conn => conn.from === point.id || conn.to === point.id)) {
+						pointElement.addEventListener('mouseenter', () => activateLine(point.id));
+						pointElement.addEventListener('mouseleave', deactivateLine);
+					}
+					
+					mapGrid.appendChild(pointElement);
+				});
+			}
+
+			function updatePointPositions() {
+				points.forEach(point => {
+					const pointElement = document.getElementById(`point-${point.id}`);
+					if (pointElement) {
+						const x = (((point.x /8) + 512 * zapad) + 128);
+						const z = (((point.z /8) + 512 * sever) + 128);
+						pointElement.style.left = `${x}px`;
+						pointElement.style.top = `${z}px`;
+						pointElement.style.transform = `translate(-50%, -50%) scale(${1/zoom})`;
+					}
+				});
+			}
+
+			function checkVisibility() {
+				const containerRect = mapContainer.getBoundingClientRect();
+				
+				tiles.forEach(tile => {
+					const tileRect = tile.getBoundingClientRect();
+					const img = tile.querySelector('img');
+					
+					const isVisible = !(
+						tileRect.right < containerRect.left ||
+						tileRect.left > containerRect.right ||
+						tileRect.bottom < containerRect.top ||
+						tileRect.top > containerRect.bottom
+					);
+					
+					img.style.display = isVisible ? 'block' : 'none';
+				});
+			}
+
+			function getMouseMapPosition(e) {
+				const rect = mapContainer.getBoundingClientRect();
+				const mouseX = e.clientX - rect.left;
+				const mouseY = e.clientY - rect.top;
+				
+				// Prepočet na mapové súradnice
+				const mapX = Math.round(((mouseX - currentX) / zoom - 512 * zapad) * 8 - 1024);
+				const mapZ = Math.round(((mouseY - currentZ) / zoom - 512 * sever) * 8 - 1024);
+				
+				// Aktualizácia zobrazenia súradníc
+				positionDisplay.textContent = `x: ${mapX}, z: ${mapZ}`;
+				return { mapX, mapZ };
+			}
+
+			function updatePosition(x, z) {
+				currentX = x;
+				currentZ = z;
+				mapGrid.style.transform = `translate(${x}px, ${z}px) scale(${zoom})`;
+				updatePointPositions();
+				updateLinePositions();
+				updateTunnelPositions();
+			}
+			
+			function updateLinePosition(line, x1, z1, x2, z2) {
+				const startX = ((x1/8) + 512 * zapad) + 128;
+				const startZ = ((z1/8) + 512 * sever) + 128;
+				const endX = ((x2/8) + 512 * zapad) + 128;
+				const endZ = ((z2/8) + 512 * sever) + 128;
+
+				const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endZ - startZ, 2));
+				const angle = Math.atan2(endZ - startZ, endX - startX) * 180 / Math.PI;
+
+				line.style.width = `${length}px`;
+				line.style.left = `${startX}px`;
+				line.style.top = `${startZ}px`;
+				line.style.transform = `rotate(${angle}deg)`;
+			}
+
+			function adjustZoom(delta, e) {
+				const mousePos = e ? getMouseMapPosition(e) : null;
+				const oldZoom = zoom;
+				const newZoom = Math.max(0.2, Math.min(8, zoom + delta));
+				
+				if (newZoom !== zoom) {
+					zoom = newZoom;
+					zoomDisplay.textContent = zoom.toFixed(1);
+
+					if (mousePos) {
+						const zoomFactor = newZoom / oldZoom;
+						const mouseX = e.clientX - mapContainer.getBoundingClientRect().left;
+						const mouseZ = e.clientY - mapContainer.getBoundingClientRect().top;
+						
+						const newX = mouseX - (mouseX - currentX) * zoomFactor;
+						const newZ = mouseZ - (mouseZ - currentZ) * zoomFactor;
+						
+						updatePosition(newX, newZ);
+					} else {
+						updatePosition(currentX, currentZ);
 					}
 				}
+			}
+			
+			// Pridáme funkciu na vytvorenie čiary
+			function createMapLines() {
+				connections.forEach(() => {
+					const line = document.createElement('div');
+					line.className = 'map-line';
+					line.style.display = 'none'; // Hide by default
+					mapGrid.appendChild(line);
+					mapLines.push(line);
+				});
+			}
+
+			// Funkcia na aktualizáciu pozície a rotácie čiary
+			
+			function updateLinePositions() {
+				activeConnections.forEach((connection, index) => {
+					if (connection) {
+						updateLinePosition(
+							mapLines[index],
+							connection.startX,
+							connection.startZ,
+							connection.endX,
+							connection.endZ
+						);
+					}
+				});
+			}
+			
+			function highlightPoint(pointId) {
+				// Najprv zrušíme všetky zvýraznenia
+				points.forEach(point => {
+					const pointElement = document.getElementById(`point-${point.id}`);
+					if (pointElement) {
+						pointElement.style.transform = `translate(-50%, -50%) scale(${1/zoom})`;
+					}
+				});
+
+				 // Zvýrazníme vyhľadaný bod
+				const pointElement = document.getElementById(`point-${pointId}`);
+				if (pointElement) {
+					pointElement.style.transform = `translate(-50%, -50%) scale(${1.5/zoom})`;
+					
+					// Vycentrujeme mapu na bod
+					const point = points.find(p => p.id === pointId);
+					if (point) {
+						const containerWidth = mapContainer.offsetWidth;
+						const containerHeight = mapContainer.offsetHeight;
+						
+						// Vypočítame pozíciu bodu v pixeloch
+						const pointPixelX = ((point.x /8) + 512 * zapad) + 128;
+						const pointPixelZ = ((point.z /8) + 512 * sever) + 128;
+						
+						// Vypočítame novú pozíciu pre vycentrovanie
+						const newX = -(pointPixelX * zoom - containerWidth/2);
+						const newZ = -(pointPixelZ * zoom - containerHeight/2);
+						
+						updatePosition(newX, newZ);
+					}
+				}
+			}
+			
+			function filterPoints(searchText) {
+				const filtered = points.filter(point => 
+					point.name.toLowerCase().includes(searchText.toLowerCase()) // Tu zmeňte `point.id` na `point.name`
+				);
+				
+				searchResults.innerHTML = '';
+				
+				if (filtered.length > 0 && searchText.length > 0) {
+					filtered.forEach(point => {
+						const div = document.createElement('div');
+						div.className = 'search-result-item';
+						div.textContent = point.name; // Tu tiež použite `point.name` miesto `point.id`
+						div.onclick = () => {
+							highlightPoint(point.id);
+							searchResults.style.display = 'none';
+							searchInput.value = point.name; // Tu tiež použite `point.name` miesto `point.id`
+						};
+						searchResults.appendChild(div);
+					});
+					searchResults.style.display = 'block';
+				} else {
+					searchResults.style.display = 'none';
+				}
+			}
+			
+			// Vytvorenie elementov pre tunely
+			function createTunnelLines() {
+				tunnels.forEach((tunnel, index) => {
+					const paths = [];
+					// Pre každý úsek tunela vytvoríme čiaru
+					for (let i = 1; i <= Object.keys(tunnel).length - 1; i++) {
+						const line = document.createElement('div');
+						line.className = 'tunnel-line';
+						line.id = `tunnel-${index}-segment-${i}`;
+						mapGrid.appendChild(line);
+						paths.push(line);
+					}
+				});
+			}
+
+			// Aktualizácia pozície tunelových čiar
+			function updateTunnelPositions() {
+				tunnels.forEach((tunnel, tunnelIndex) => {
+					const points = Object.values(tunnel);
+					
+					// Pre každý úsek tunela
+					for (let i = 0; i < points.length - 1; i++) {
+						const start = points[i];
+						const end = points[i + 1];
+						const tunnelLine = document.getElementById(`tunnel-${tunnelIndex}-segment-${i + 1}`);
+						
+						if (tunnelLine) {
+							const startX = ((start.x/8) + 512 * zapad) + 128;
+							const startZ = ((start.z/8) + 512 * sever) + 128;
+							const endX = ((end.x/8) + 512 * zapad) + 128;
+							const endZ = ((end.z/8) + 512 * sever) + 128;
+
+							const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endZ - startZ, 2));
+							const angle = Math.atan2(endZ - startZ, endX - startX) * 180 / Math.PI;
+
+							tunnelLine.style.width = `${length}px`;
+							tunnelLine.style.left = `${startX}px`;
+							tunnelLine.style.top = `${startZ}px`;
+							// Upravené škálovanie pri zoome
+							tunnelLine.style.transformOrigin = '0 50%';
+							tunnelLine.style.transform = `rotate(${angle}deg)`;
+							// Upravíme hrúbku čiary podľa zoomu
+							tunnelLine.style.height = `${3 / zoom}px`;
+							// Upravíme veľkosť medzier v prerušovanej čiare podľa zoomu
+							tunnelLine.style.background = `repeating-linear-gradient(
+								90deg,
+								#b56824,
+								#b56824 ${10 / zoom}px,
+								transparent ${10 / zoom}px,
+								transparent ${20 / zoom}px
+							)`;
+						}
+					}
+				});
+			}
+
+			// Upravíme existujúcu funkciu updatePosition aby zahŕňala aj aktualizáciu tunelov
+			function updatePosition(x, z) {
+				currentX = x;
+				currentZ = z;
+				mapGrid.style.transform = `translate(${x}px, ${z}px) scale(${zoom})`;
+				updatePointPositions();
+				updateLinePositions();
+				updateTunnelPositions();
+			}
+			
+			function initializeMap() {
+				console.log(sever, zapad, juh, vychod);
+				document.documentElement.style.setProperty('--columns', vychod + zapad);
+				
+				// Vytvorenie mapových dielov
+				createMapTiles();
+				createMapLines();
+				createTunnelLines();
+				createMapPoints();
+				updatePosition(currentX, currentZ);
+			}
+
+			function createMapTiles() {
+				const tiles = [];
+				for (let z = -sever; z < juh; z++) {
+					for (let x = -zapad; x < vychod; x++) {
+						const tile = document.createElement('div');
+						tile.className = 'map-tile';
+						
+						const tileX = x * 512;
+						const tileZ = z * 512;
+						
+						tile.dataset.x = tileX;
+						tile.dataset.z = tileZ;
+						
+						const img = document.createElement('img');
+						img.src = `Data/map_${x}_${z}.webp`;
+						img.alt = `Mapa ${x},${z}`;
+						img.loading = "lazy";
+						img.draggable = false;
+						tile.appendChild(img);
+						
+						mapGrid.appendChild(tile);
+						tiles.push(tile);
+					}
+				}
+			}
+			
+			function createConnections(points) {
+				// Rozdelíme body do skupín podľa poradia
+				const pointGroups = {};
+				
+				// Zoskupenie bodov podľa ich prefixu (a1, b1, a2, b2...)
+				points.forEach(point => {
+					const match = point.id.match(/([ab])(\d+)/);
+					if (match) {
+						const prefix = match[1];
+						const number = match[2];
+						
+						if (!pointGroups[number]) {
+							pointGroups[number] = {};
+						}
+						pointGroups[number][prefix] = point.id;
+					}
+				});
+				
+				// Vytvorenie spojení
+				const connections = [];
+				
+				// Prejdeme všetky spárované body
+				Object.values(pointGroups).forEach(pair => {
+					// Pridáme spojenie len ak existujú oba body (a aj b)
+					if (pair.a && pair.b) {
+						connections.push({
+							from: pair.a,
+							to: pair.b
+						});
+					}
+				});
+				
+				return connections;
+			}
+			
+			searchInput.addEventListener('input', (e) => {
+				filterPoints(e.target.value);
 			});
-		}
 
-		// Upravíme existujúcu funkciu updatePosition aby zahŕňala aj aktualizáciu tunelov
-		function updatePosition(x, z) {
-			currentX = x;
-			currentZ = z;
-			mapGrid.style.transform = `translate(${x}px, ${z}px) scale(${zoom})`;
-			updatePointPositions();
-			updateLinePositions();
-			updateTunnelPositions();
-		}
-		
-		searchInput.addEventListener('input', (e) => {
-            filterPoints(e.target.value);
-        });
+			// Skrytie výsledkov pri kliknutí mimo
+			document.addEventListener('click', (e) => {
+				if (!searchResults.contains(e.target) && e.target !== searchInput) {
+					searchResults.style.display = 'none';
+				}
+			});
 
-        // Skrytie výsledkov pri kliknutí mimo
-        document.addEventListener('click', (e) => {
-            if (!searchResults.contains(e.target) && e.target !== searchInput) {
-                searchResults.style.display = 'none';
-            }
-        });
+			mapContainer.addEventListener('wheel', (e) => {
+				e.preventDefault();
+				const delta = e.deltaY > 0 ? -0.1 : 0.1;
+				adjustZoom(delta, e);
+			});
 
-        mapContainer.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            const delta = e.deltaY > 0 ? -0.1 : 0.1;
-            adjustZoom(delta, e);
-        });
+			mapContainer.addEventListener('mousedown', (e) => {
+				if (e.button === 0) { // Len ľavé tlačidlo myši
+					isDragging = true;
+					startX = e.clientX - currentX;
+					startZ = e.clientY - currentZ;
+					mapContainer.style.cursor = 'grabbing';
+				}
+			});
 
-		mapContainer.addEventListener('mousedown', (e) => {
-			if (e.button === 0) { // Len ľavé tlačidlo myši
-				isDragging = true;
-				startX = e.clientX - currentX;
-				startZ = e.clientY - currentZ;
-				mapContainer.style.cursor = 'grabbing';
-			}
-		});
+			mapContainer.addEventListener('mousemove', (e) => {
+				getMouseMapPosition(e);
 
-		mapContainer.addEventListener('mousemove', (e) => {
-			getMouseMapPosition(e);
+				if (isDragging) {
+					const newX = e.clientX - startX;
+					const newZ = e.clientY - startZ;
+					updatePosition(newX, newZ);
+				}
+			});
 
-			if (isDragging) {
-				const newX = e.clientX - startX;
-				const newZ = e.clientY - startZ;
-				updatePosition(newX, newZ);
-			}
-		});
+			mapContainer.addEventListener('mouseup', (e) => {
+				if (e.button === 0) {
+					isDragging = false;
+					mapContainer.style.cursor = 'grab';
+				}
+			});
 
-        mapContainer.addEventListener('mouseup', (e) => {
-			if (e.button === 0) {
+			mapContainer.addEventListener('mouseleave', () => {
 				isDragging = false;
 				mapContainer.style.cursor = 'grab';
-			}
-		});
+				positionDisplay.textContent = 'x: 0, z: 0';
+			});
 
-        mapContainer.addEventListener('mouseleave', () => {
-			isDragging = false;
-			mapContainer.style.cursor = 'grab';
-			positionDisplay.textContent = 'x: 0, z: 0';
-		});
+			mapContainer.addEventListener('selectstart', (e) => {
+				if (isDragging) {
+					e.preventDefault();
+				}
+			});
 
-        mapContainer.addEventListener('selectstart', (e) => {
-            if (isDragging) {
-                e.preventDefault();
-            }
-        });
-
-        // Inicializácia
-        createMapLines();
-		createTunnelLines();
-		createMapPoints();
-		updatePosition(currentX, currentZ);
-    </script>
-</body>
+			// Inicializácia
+			createMapLines();
+			createTunnelLines();
+			createMapPoints();
+			updatePosition(currentX, currentZ);
+		</script>
+	</body>
 </html>
